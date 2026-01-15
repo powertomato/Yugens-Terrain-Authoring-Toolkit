@@ -376,7 +376,11 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, regenerate_
 		coords.y * ((dimensions.z - 1) * cell_size.y)
 	)
 	
-	_set_owner_recursive(chunk, EditorInterface.get_edited_scene_root())
+	if Engine.is_editor_hint():
+		var editor_interface = Engine.get_singleton('EditorInterface')
+		_set_owner_recursive(chunk, editor_interface.get_edited_scene_root())
+	else:
+		_set_owner_recursive(chunk, get_tree().root)
 	chunk.initialize_terrain(regenerate_mesh)
 	print_verbose("Added new chunk to terrain system at ", chunk)
 

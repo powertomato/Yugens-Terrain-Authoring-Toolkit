@@ -115,10 +115,14 @@ func add_texture_settings() -> void:
 		vbox.add_child(c_cont, true)
 		
 		var tex_var : Texture2D = terrain.get(VAR_NAMES[i].get("tex_var")) #EditorResourcePicker
+		# Skip empty/abstract Texture2D objects (causes EditorResourcePicker validation error)
+		# Valid textures are always concrete subclasses, never the base Texture2D class
+		if tex_var != null and tex_var.get_class() == "Texture2D":
+			tex_var = null
 		var sprite_var : CompressedTexture2D #EditorResourcePicker
 		var color_var : Color #ColorPickerButton
 		var use_grass_var : bool #Checkbox
-		
+
 		# Add the ground vertex texture
 		var editor_r_picker := EditorResourcePicker.new()
 		editor_r_picker.set_base_type("Texture2D")
@@ -131,7 +135,10 @@ func add_texture_settings() -> void:
 		if i <= 5:
 			# Add the grass instance sprite
 			sprite_var = terrain.get(VAR_NAMES[i].get("sprite_var"))
-			
+			# Skip empty/abstract Texture2D objects
+			if sprite_var != null and sprite_var.get_class() == "Texture2D":
+				sprite_var = null
+
 			var editor_r_picker2 := EditorResourcePicker.new()
 			editor_r_picker2.set_base_type("Texture2D")
 			editor_r_picker2.edited_resource = sprite_var
@@ -190,6 +197,9 @@ func add_texture_settings() -> void:
 
 		# Wall texture picker
 		var wall_tex : Texture2D = terrain.get(WALL_VAR_NAMES[i].get("tex_var"))
+		# Skip empty/abstract Texture2D objects
+		if wall_tex != null and wall_tex.get_class() == "Texture2D":
+			wall_tex = null
 		var editor_r_picker := EditorResourcePicker.new()
 		editor_r_picker.set_base_type("Texture2D")
 		editor_r_picker.edited_resource = wall_tex

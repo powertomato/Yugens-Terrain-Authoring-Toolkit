@@ -932,7 +932,7 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 		match i:
 			0: # floor_textures
 				for tex in _preset.new_textures.floor_textures:
-					if tex == null:
+					if tex == null or tex.get_class() == "Texture2D":
 						continue
 					match _preset.new_textures.floor_textures.find(tex):
 						0:
@@ -965,7 +965,7 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 							current_terrain_node.texture_14 = tex
 			1: # grass_sprites
 				for tex in _preset.new_textures.grass_sprites:
-					if tex == null:
+					if tex == null or tex.get_class() == "Texture2D":
 						continue
 					match _preset.new_textures.grass_sprites.find(tex):
 						0:
@@ -1010,7 +1010,7 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 							current_terrain_node.tex6_has_grass = val
 			4: # wall_textures
 				for tex in _preset.new_textures.wall_textures:
-					if tex == null:
+					if tex == null or tex.get_class() == "Texture2D":
 						continue
 					match _preset.new_textures.wall_textures.find(tex):
 						0:

@@ -137,8 +137,10 @@ func _exit_tree() -> void:
 
 	# Only save mesh if not being removed temporarily (undo/redo)
 	if not _skip_save_on_exit:
-		var scene = get_tree().current_scene
-		if scene:
+		# Guard get_tree() - can be null during multi-scene transitions
+		var tree = get_tree()
+		if tree and tree.current_scene:
+			var scene = tree.current_scene
 			ResourceSaver.save(mesh, "res://"+scene.name+"/"+name+".tres", ResourceSaver.FLAG_COMPRESS)
 
 
@@ -770,7 +772,9 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	if floor_mode:
 		uv2 = Vector2(vert.x, vert.z) / cell_size
 	else:
-		var global_pos = vert + global_position
+		# This avoids is_inside_tree() errors when inactive scene tabs are loaded
+		var chunk_pos : Vector3 = global_position if is_inside_tree() else position
+		var global_pos = vert + chunk_pos
 		uv2 = (Vector2(global_pos.x, global_pos.y) + Vector2(global_pos.z, global_pos.y))
 	
 	st.set_uv2(uv2)

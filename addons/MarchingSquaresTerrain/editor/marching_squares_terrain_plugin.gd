@@ -119,6 +119,9 @@ func _enter_tree():
 	instance = self
 	call_deferred("_deferred_enter_tree")
 
+	
+	print_rich("Welcome to [color=MEDIUM_ORCHID][url=https://www.youtube.com/@yugen_seishin]Yūgen[/url][/color]'s [wave]Marching Squares Terrain Authoring Toolkit[/wave]\nThis plugin is under MIT license")
+
 
 func _deferred_enter_tree() -> void:
 	if not _safe_initialize():

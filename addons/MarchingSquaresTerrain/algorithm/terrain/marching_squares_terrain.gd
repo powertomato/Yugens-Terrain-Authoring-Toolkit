@@ -379,9 +379,6 @@ func _init() -> void:
 	grass_mesh = base_grass_mesh.duplicate(true)
 	grass_mesh.material = base_grass_mesh.material.duplicate(true)
 
-	print_rich("Welcome to [color=MEDIUM_ORCHID][url=https://www.youtube.com/@yugen_seishin]Yūgen[/url][/color]'s [wave]Marching Squares Terrain Authoring Toolkit[/wave]\nThis plugin is under MIT license")
-
-
 func _enter_tree() -> void:
 	call_deferred("_deferred_enter_tree")
 
@@ -464,8 +461,11 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, regenerate_
 	chunk._skip_save_on_exit = false  # Reset flag when chunk is re-added (undo restores chunk)
 
 	add_child(chunk)
-		
-	chunk.global_position = Vector3(
+
+	# Use position instead of global_position to avoid "is_inside_tree()" errors
+	# when multiple scenes with MarchingSquaresTerrain are open in editor tabs.
+	# Since chunks are direct children of terrain, position equals global_position.
+	chunk.position = Vector3(
 		coords.x * ((dimensions.x - 1) * cell_size.x),
 		0,
 		coords.y * ((dimensions.z - 1) * cell_size.y)

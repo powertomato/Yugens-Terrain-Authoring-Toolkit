@@ -12,6 +12,11 @@ const MERGE_MODE = {
 	Mode.SPHERICAL: 20.0,
 }
 
+
+# < 1.0 = more aggressive wall detection 
+# > 1.0 = less aggressive / more slope blend
+const BLEND_EDGE_SENSITIVITY : float = 1.25
+
 # These two need to be normal export vars or else godot's internal logic crashes the plugin
 @export var terrain_system : MarchingSquaresTerrain
 @export var chunk_coords : Vector2i = Vector2i.ZERO
@@ -669,15 +674,12 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	if floor_mode and terrain_system.use_ridge_texture:
 		is_ridge = (uv.y > 1.0 - terrain_system.ridge_threshold)
 	
-	# Select source color maps based on floor_mode AND ridge detection
-	# Floor vertices use color_map_0/1
 	# Wall vertices AND ridge vertices use wall_color_map_0/1
 	var use_wall_colors := (not floor_mode) or is_ridge
 	var source_map_0 : PackedColorArray = wall_color_map_0 if use_wall_colors else color_map_0
 	var source_map_1 : PackedColorArray = wall_color_map_1 if use_wall_colors else color_map_1
 	
-	# Use the minimum between both lerped diagonals, component-wise
-	# Will result in smoother diagonal paths
+	# Attempt to have smoother diagonal paths
 	var color_0: Color
 	if new_chunk:
 		color_0 = Color(1.0, 0.0, 0.0, 0.0)
@@ -763,14 +765,20 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	g_mask.g = 1.0 if is_ridge else 0.0
 	st.set_custom(1, g_mask)
 	
-	# CUSTOM2: Material blend data for phantom fix (3-texture support)
-	# Encoding: R=packed(mat_a,mat_b), G=mat_c/15, B=weight_a, A=weight_b
-	# A >= 1.5 signals use vertex colors (boundary cells use A=2.0)
+	# Use edge connection to determine blending path
+	# Avoid issues on weird Cliffs vs Slopes blending giving each a different path
 	var mat_blend : Color = calculate_material_blend_data(x, z, source_map_0, source_map_1)
-	if cell_is_boundary and floor_mode:
-		mat_blend.a = 2.0  # Signal shader to use vertex colors instead of phantom fix
+	var blend_threshold : float = merge_threshold * BLEND_EDGE_SENSITIVITY # We can tweak the BLEND_EDGE_SENSITIVITY to allow more "agressive" Cliff vs Slope detection
+	var blend_ab : bool = abs(ay-by) < blend_threshold
+	var blend_ac : bool = abs(ay-cy) < blend_threshold
+	var blend_bd : bool = abs(by-dy) < blend_threshold
+	var blend_cd : bool = abs(cy-dy) < blend_threshold
+	var cell_has_walls_for_blend : bool = not (blend_ab and blend_ac and blend_bd and blend_cd)
+	if cell_has_walls_for_blend and floor_mode:
+		mat_blend.a = 2.0 
 	st.set_custom(2, mat_blend)
 	
+	#same calculations from here
 	var vert = Vector3((cell_coords.x+x) * cell_size.x, y, (cell_coords.y+z) * cell_size.y)
 	var uv2
 	if floor_mode:

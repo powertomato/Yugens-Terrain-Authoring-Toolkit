@@ -9,7 +9,7 @@
 render_priority = -1
 shader = ExtResource("1_cywoj")
 shader_parameter/wall_threshold = 0.0
-shader_parameter/chunk_size = Vector3i(32, 32, 32)
+shader_parameter/chunk_size = Vector3i(33, 32, 33)
 shader_parameter/ground_albedo = Color(0.39215687, 0.47058824, 0.31764707, 1)
 shader_parameter/ground_albedo_2 = Color(0.30519673, 0.4626618, 0.5514242, 1)
 shader_parameter/ground_albedo_3 = Color(0.72663283, 0.4819908, 0.8144531, 1)

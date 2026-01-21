@@ -79,9 +79,22 @@ func _redraw():
 	
 	var terrain_chunk_hovered: bool = terrain_plugin.terrain_hovered and terrain_system.chunks.has(terrain_plugin.current_hovered_chunk)
 	
+	# Check if we're in wall painting mode
+	var is_wall_painting : bool = terrain_plugin.paint_walls_mode and terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING
+
 	if terrain_chunk_hovered:
-		# Standard horizontal brush transform
-		var brush_transform : Transform3D = Transform3D(Vector3.RIGHT * terrain_plugin.brush_size, Vector3.UP, Vector3.BACK * terrain_plugin.brush_size, pos)
+		# Brush radius visualization
+		var brush_transform : Transform3D
+		brush_transform = Transform3D(Vector3.RIGHT * terrain_plugin.brush_size, Vector3.UP, Vector3.BACK * terrain_plugin.brush_size, pos)
+
+		if is_wall_painting:
+			brush_transform = Transform3D(
+				Vector3.RIGHT * terrain_plugin.brush_size,
+				Vector3.BACK,  # Normal direction (unit vector, no scale)
+				Vector3.UP * terrain_plugin.brush_size,
+				pos
+			)
+			
 		if terrain_plugin.mode != terrain_plugin.TerrainToolMode.SMOOTH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.GRASS_MASK and terrain_plugin.mode != terrain_plugin.TerrainToolMode.DEBUG_BRUSH:
 			add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, null, brush_transform)
 
@@ -156,8 +169,10 @@ func _redraw():
 						
 						var draw_position = Vector3(world_x, y, world_z)
 						var draw_transform = Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-						add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
-						
+						# Only draw ground brush squares if NOT in wall paint mode
+						if not is_wall_painting:
+							add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
+
 						# Draw to current pattern
 						if terrain_plugin.is_drawing:
 							if not terrain_plugin.current_draw_pattern.has(cursor_chunk_coords):

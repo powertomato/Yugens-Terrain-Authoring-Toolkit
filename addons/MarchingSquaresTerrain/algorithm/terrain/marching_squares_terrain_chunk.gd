@@ -4,6 +4,7 @@ class_name MarchingSquaresTerrainChunk
 
 
 enum Mode {CUBIC, POLYHEDRON, ROUNDED_POLYHEDRON, SEMI_ROUND, SPHERICAL}
+
 const MERGE_MODE = {
 	Mode.CUBIC: 0.6,
 	Mode.POLYHEDRON: 1.3,
@@ -11,7 +12,6 @@ const MERGE_MODE = {
 	Mode.SEMI_ROUND: 5.0,
 	Mode.SPHERICAL: 20.0,
 }
-
 
 # < 1.0 = more aggressive wall detection 
 # > 1.0 = less aggressive / more slope blend
@@ -159,7 +159,7 @@ func regenerate_mesh():
 	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
 	st.set_custom_format(1, SurfaceTool.CUSTOM_RGBA_FLOAT)
 	st.set_custom_format(2, SurfaceTool.CUSTOM_RGBA_FLOAT)  
-
+	
 	var start_time: int = Time.get_ticks_msec()
 	
 	if not find_child("GrassPlanter"):
@@ -673,7 +673,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	var is_ridge := false
 	if floor_mode and terrain_system.use_ridge_texture:
 		is_ridge = (uv.y > 1.0 - terrain_system.ridge_threshold)
-
+	
 	# Wall vertices AND ridge vertices use wall_color_map_0/1
 	# In hard edge mode, non-ridge floor vertices use floor colors
 	# Ridge vertices MUST keep wall colors for correct wall texture display
@@ -710,11 +710,11 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 			# This prevents color bleeding between different height levels
 			var height_range = cell_max_height - cell_min_height
 			var height_factor = clamp((y - cell_min_height) / height_range, 0.0, 1.0)
-
+			
 			# Select appropriate color set based on vertex type (floor vs wall/ridge)
 			var lower_0: Color = cell_wall_lower_color_0 if use_wall_colors else cell_floor_lower_color_0
 			var upper_0: Color = cell_wall_upper_color_0 if use_wall_colors else cell_floor_upper_color_0
-
+			
 			# Sharp bands: < 0.3 = lower color, > 0.7 = upper color, middle = blend
 			if height_factor < lower_thresh:
 				color_0 = lower_0
@@ -756,10 +756,10 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 		else:
 			var height_range = cell_max_height - cell_min_height
 			var height_factor = clamp((y - cell_min_height) / height_range, 0.0, 1.0)
-
+			
 			var lower_1: Color = cell_wall_lower_color_1 if use_wall_colors else cell_floor_lower_color_1
 			var upper_1: Color = cell_wall_upper_color_1 if use_wall_colors else cell_floor_upper_color_1
-
+			
 			if height_factor < 0.3:
 				color_1 = lower_1
 			elif height_factor > 0.7:
@@ -926,18 +926,18 @@ func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: P
 	var tex_d : int = get_texture_index_from_colors(
 		source_map_0[(cell_coords.y + 1) * dimensions.x + cell_coords.x + 1],
 		source_map_1[(cell_coords.y + 1) * dimensions.x + cell_coords.x + 1])
-
+	
 	# Position weights for bilinear interpolation
 	var weight_a : float = (1.0 - vert_x) * (1.0 - vert_z)
 	var weight_b : float = vert_x * (1.0 - vert_z)
 	var weight_c : float = (1.0 - vert_x) * vert_z
 	var weight_d : float = vert_x * vert_z
-
+	
 	# Accumulate weights for all 3 cell materials
 	var weight_mat_a : float = 0.0
 	var weight_mat_b : float = 0.0
 	var weight_mat_c : float = 0.0
-
+	
 	# Corner A
 	if tex_a == cell_mat_a: weight_mat_a += weight_a
 	elif tex_a == cell_mat_b: weight_mat_b += weight_a
@@ -954,17 +954,17 @@ func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: P
 	if tex_d == cell_mat_a: weight_mat_a += weight_d
 	elif tex_d == cell_mat_b: weight_mat_b += weight_d
 	elif tex_d == cell_mat_c: weight_mat_c += weight_d
-
+	
 	# Normalize weights
 	var total_weight : float = weight_mat_a + weight_mat_b + weight_mat_c
 	if total_weight > 0.001:
 		weight_mat_a /= total_weight
 		weight_mat_b /= total_weight
 		# weight_mat_c = 1 - weight_mat_a - weight_mat_b (computed in shader)
-
+	
 	# Pack mat_a and mat_b into one channel (each is 0-15, so together 0-255)
 	var packed_mats : float = (float(cell_mat_a) + float(cell_mat_b) * 16.0) / 255.0
-
+	
 	return Color(packed_mats, float(cell_mat_c) / 15.0, weight_mat_a, weight_mat_b)
 
 

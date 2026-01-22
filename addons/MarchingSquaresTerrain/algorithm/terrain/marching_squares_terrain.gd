@@ -621,10 +621,10 @@ func _ensure_textures() -> void:
 # Call this after setting is_batch_updating = true and changing properties
 func force_batch_update() -> void:
 	var grass_mat := grass_mesh.material as ShaderMaterial
-
+	
 	# TERRAIN MATERIAL - Core parameters
 	terrain_material.set_shader_parameter("cell_size", cell_size)
-
+	
 	# TERRAIN MATERIAL - Ground TExtures
 	terrain_material.set_shader_parameter("vc_tex_rr", ground_texture)
 	terrain_material.set_shader_parameter("vc_tex_rg", texture_2)
@@ -665,7 +665,7 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("wall_albedo_4", wall_color_4)
 	terrain_material.set_shader_parameter("wall_albedo_5", wall_color_5)
 	terrain_material.set_shader_parameter("wall_albedo_6", wall_color_6)
-
+	
 	# TERRAIN MATERIAL - Per-Texture UV Scales
 	terrain_material.set_shader_parameter("texture_scale_1", texture_scale_1)
 	terrain_material.set_shader_parameter("texture_scale_2", texture_scale_2)
@@ -683,7 +683,7 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("texture_scale_14", texture_scale_14)
 	terrain_material.set_shader_parameter("texture_scale_15", texture_scale_15)
 	terrain_material.set_shader_parameter("texture_scale_16", texture_scale_16)
-
+	
 	# GRASS MATERIAL - Grass Textures 
 	grass_mat.set_shader_parameter("grass_texture", grass_sprite)
 	grass_mat.set_shader_parameter("grass_texture_2", grass_sprite_tex_2)
@@ -742,7 +742,7 @@ func save_to_preset() -> void:
 	current_terrain_preset.new_textures.floor_textures[12] = texture_13
 	current_terrain_preset.new_textures.floor_textures[13] = texture_14
 	current_terrain_preset.new_textures.floor_textures[14] = texture_15
-
+	
 	# Grass sprites
 	current_terrain_preset.new_textures.grass_sprites[0] = grass_sprite
 	current_terrain_preset.new_textures.grass_sprites[1] = grass_sprite_tex_2
@@ -750,7 +750,7 @@ func save_to_preset() -> void:
 	current_terrain_preset.new_textures.grass_sprites[3] = grass_sprite_tex_4
 	current_terrain_preset.new_textures.grass_sprites[4] = grass_sprite_tex_5
 	current_terrain_preset.new_textures.grass_sprites[5] = grass_sprite_tex_6
-
+	
 	# Grass colors
 	current_terrain_preset.new_textures.grass_colors[0] = ground_color
 	current_terrain_preset.new_textures.grass_colors[1] = ground_color_2
@@ -758,14 +758,14 @@ func save_to_preset() -> void:
 	current_terrain_preset.new_textures.grass_colors[3] = ground_color_4
 	current_terrain_preset.new_textures.grass_colors[4] = ground_color_5
 	current_terrain_preset.new_textures.grass_colors[5] = ground_color_6
-
+	
 	# Has grass flags 
 	current_terrain_preset.new_textures.has_grass[0] = tex2_has_grass
 	current_terrain_preset.new_textures.has_grass[1] = tex3_has_grass
 	current_terrain_preset.new_textures.has_grass[2] = tex4_has_grass
 	current_terrain_preset.new_textures.has_grass[3] = tex5_has_grass
 	current_terrain_preset.new_textures.has_grass[4] = tex6_has_grass
-
+	
 	# Wall textures 
 	current_terrain_preset.new_textures.wall_textures[0] = wall_texture
 	current_terrain_preset.new_textures.wall_textures[1] = wall_texture_2
@@ -773,7 +773,7 @@ func save_to_preset() -> void:
 	current_terrain_preset.new_textures.wall_textures[3] = wall_texture_4
 	current_terrain_preset.new_textures.wall_textures[4] = wall_texture_5
 	current_terrain_preset.new_textures.wall_textures[5] = wall_texture_6
-
+	
 	# Wall colors 
 	current_terrain_preset.new_textures.wall_colors[0] = wall_color
 	current_terrain_preset.new_textures.wall_colors[1] = wall_color_2

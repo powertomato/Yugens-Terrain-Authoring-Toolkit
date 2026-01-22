@@ -350,5 +350,5 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"texture_scale_15":
 			if p_value is float or p_value is int:
 				terrain.texture_scale_15 = float(p_value)
-
+	
 	terrain.save_to_preset()

@@ -195,17 +195,23 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 					
 					var has_tex : bool = false
 					var material = terrain_system.terrain_material
+					var tex_scale : float = terrain_system.texture_scale_1
 					match texture_id:
 						2:
 							has_tex = true if material.get_shader_parameter("vc_tex_rg") != null else false
+							tex_scale = terrain_system.texture_scale_2
 						3:
 							has_tex = true if material.get_shader_parameter("vc_tex_rb") != null else false
+							tex_scale = terrain_system.texture_scale_3
 						4:
 							has_tex = true if material.get_shader_parameter("vc_tex_ra") != null else false
+							tex_scale = terrain_system.texture_scale_4
 						5:
 							has_tex = true if material.get_shader_parameter("vc_tex_gr") != null else false
+							tex_scale = terrain_system.texture_scale_5
 						6:
 							has_tex = true if material.get_shader_parameter("vc_tex_gg") != null else false
+							tex_scale = terrain_system.texture_scale_6
 						_: # Base grass
 							has_tex = true if material.get_shader_parameter("vc_tex_rr") != null else false
 					var terrain_image = null
@@ -214,10 +220,15 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 					
 					var instance_color : Color
 					if terrain_image:
-						var uv_x = clamp(p.x / (terrain_system.dimensions.x * terrain_system.cell_size.x), 0.0, 1.0) 
+						var uv_x = clamp(p.x / (terrain_system.dimensions.x * terrain_system.cell_size.x), 0.0, 1.0)
 						var uv_y = clamp(p.z / (terrain_system.dimensions.z * terrain_system.cell_size.y), 0.0, 1.0)
 						
-						#Believe this might fix the Grass Color bug (part 2)
+						uv_x *= tex_scale
+						uv_y *= tex_scale
+						
+						uv_x = abs(fmod(uv_x, 1.0))
+						uv_y = abs(fmod(uv_y, 1.0))
+						
 						var px = int(uv_x * (terrain_image.get_width() - 1))
 						var py = int(uv_y * (terrain_image.get_height() - 1))
 						

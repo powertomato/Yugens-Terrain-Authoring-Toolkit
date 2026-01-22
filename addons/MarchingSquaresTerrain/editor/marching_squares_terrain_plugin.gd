@@ -296,7 +296,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			if result:
 				draw_position = terrain.to_local(result.position)
 				draw_area_hovered = true
-
+		
 		# ALT to clear the current draw pattern. Don't clear while setting
 		if Input.is_key_pressed(KEY_ALT) and not is_setting:
 			current_draw_pattern.clear()
@@ -639,12 +639,12 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			# Build wall color patterns - ONLY paint cells in the brush pattern (no expansion)
 			# Walls are rendered at cell boundaries, so painting cell A affects walls on A's edges
 			_set_vertex_colors(current_quick_paint.wall_texture_slot)
-
+			
 			var wall_color_pattern := {}
 			var wall_color_pattern_cc := {}
 			var wall_color_restore := {}
 			var wall_color_restore_cc := {}
-
+			
 			# Apply wall colors ONLY to cells in the brush pattern
 			for chunk_coords in pattern:
 				wall_color_pattern[chunk_coords] = {}

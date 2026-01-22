@@ -1,6 +1,7 @@
 extends Resource
 class_name MarchingSquaresToolAttributeSettings
 
+
 # General brush attributes
 @export var brush_type : bool = false
 @export var size : bool = false

@@ -133,20 +133,20 @@ func add_texture_settings() -> void:
 		editor_r_picker.set_custom_minimum_size(Vector2(100, 25))
 		
 		vbox.add_child(editor_r_picker, true)
-
+		
 		# Add scale slider for each texture
 		if VAR_NAMES[i].has("scale_var"):
 			var scale_var_name : String = VAR_NAMES[i].get("scale_var")
 			var scale_value : float = terrain.get(scale_var_name) if terrain.get(scale_var_name) else 1.0
-
+			
 			var scale_hbox := HBoxContainer.new()
 			scale_hbox.set_custom_minimum_size(Vector2(150, 20))
-
+			
 			var scale_label := Label.new()
 			scale_label.text = "Scale:"
 			scale_label.set_custom_minimum_size(Vector2(40, 20))
 			scale_hbox.add_child(scale_label)
-
+			
 			var scale_slider := HSlider.new()
 			scale_slider.min_value = 0.1
 			scale_slider.max_value = 40.0
@@ -156,8 +156,11 @@ func add_texture_settings() -> void:
 			scale_slider.value_changed.connect(
 				func(val): _on_texture_setting_changed(scale_var_name, val)
 			)
+			scale_slider.drag_ended.connect(
+				func(val): _on_slider_drag_ended(val)
+			)
 			scale_hbox.add_child(scale_slider)
-
+			
 			var scale_value_label := Label.new()
 			scale_value_label.text = str(scale_value)
 			scale_value_label.set_custom_minimum_size(Vector2(25, 20))
@@ -165,9 +168,9 @@ func add_texture_settings() -> void:
 				func(val): scale_value_label.text = str(snapped(val, 0.1))
 			)
 			scale_hbox.add_child(scale_value_label)
-
+			
 			vbox.add_child(scale_hbox, true)
-
+		
 		if i <= 5:
 			# Add the grass instance sprite
 			sprite_var = terrain.get(VAR_NAMES[i].get("sprite_var"))
@@ -210,9 +213,8 @@ func add_texture_settings() -> void:
 			c_cont_2.add_child(checkbox, true)
 			vbox.add_child(c_cont_2, true)
 		
-		if i <= 5:
-			vbox.add_child(HSeparator.new())
-
+		vbox.add_child(HSeparator.new())
+	
 	vbox.add_child(VSeparator.new(), true)
 	var export_button = MarchingSquaresTexturePresetExporter.new()
 	vbox.add_child(export_button, true)
@@ -223,3 +225,8 @@ func add_texture_settings() -> void:
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 	emit_signal("texture_setting_changed", p_setting_name, p_value)
+
+
+func _on_slider_drag_ended(ended: bool) -> void:
+	for chunk: MarchingSquaresTerrainChunk in plugin.current_terrain_node.chunks.values():
+		chunk.grass_planter.regenerate_all_cells()

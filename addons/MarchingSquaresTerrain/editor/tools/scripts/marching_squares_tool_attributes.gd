@@ -34,6 +34,7 @@ var terrain_settings_data : Dictionary = {
 	"use_ridge_texture": "CheckBox",
 	"ridge_threshold": "EditorSpinSlider",
 	"ledge_threshold": "EditorSpinSlider",
+	"extra_collision_layer": "OptionButton",
 }
 
 var plugin : MarchingSquaresTerrainPlugin
@@ -485,8 +486,14 @@ func add_setting(p_params: Dictionary) -> void:
 							option_button.add_item("Smoothed Triangles")
 							option_button.add_item("Hard Squares")
 							option_button.add_item("Hard Triangles")
+						elif setting == "extra_collision_layer":
+							for i in range(24):
+								option_button.add_item(str(i+9))
 						# Set current selection from terrain node
-						option_button.selected = plugin.current_terrain_node.get(setting)
+						if setting == "extra_collision_layer":
+							option_button.selected = plugin.current_terrain_node.get(setting) - 9
+						else:
+							option_button.selected = plugin.current_terrain_node.get(setting)
 						option_button.item_selected.connect(func(index): _on_terrain_setting_changed(setting, index))
 						option_button.set_custom_minimum_size(Vector2(100, 35))
 						

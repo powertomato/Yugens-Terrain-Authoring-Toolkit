@@ -98,7 +98,7 @@ func _redraw():
 			var space := terrain_system.get_world_3d().direct_space_state
 			var query := PhysicsRayQueryParameters3D.create(
 				ray_origin,
-				ray_origin + ray_dir * 1000.0
+				ray_origin + ray_dir * 10000.0
 			)
 			
 			query.collide_with_areas = false

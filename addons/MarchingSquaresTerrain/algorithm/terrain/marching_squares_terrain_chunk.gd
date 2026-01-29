@@ -127,7 +127,8 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 			regenerate_mesh()
 		for child in get_children():
 			if child is StaticBody3D:
-				child.collision_layer = 17 # ground (1) + terrain (16)
+				child.collision_layer = 17
+				child.set_collision_layer_value(terrain_system.extra_collision_layer, true)
 		
 		grass_planter.setup(self, true)
 		grass_planter.regenerate_all_cells()
@@ -198,7 +199,8 @@ func regenerate_mesh():
 	create_trimesh_collision()
 	for child in get_children():
 		if child is StaticBody3D:
-			child.collision_layer = 17 # ground (1) + terrain (16)
+			child.collision_layer = 17
+			child.set_collision_layer_value(terrain_system.extra_collision_layer, true)
 	
 	var elapsed_time: int = Time.get_ticks_msec() - start_time
 	print_verbose("Generated terrain in "+str(elapsed_time)+"ms")

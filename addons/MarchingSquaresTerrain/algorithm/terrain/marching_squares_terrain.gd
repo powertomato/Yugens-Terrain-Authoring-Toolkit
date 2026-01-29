@@ -22,6 +22,11 @@ class_name MarchingSquaresTerrain
 		terrain_material.set_shader_parameter("blend_mode", value)
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.regenerate_all_cells()
+@export_custom(PROPERTY_HINT_RANGE, "9, 32", PROPERTY_USAGE_STORAGE) var extra_collision_layer : int = 9:
+	set(value):
+		extra_collision_layer = value
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.regenerate_all_cells()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_threshold : float = 0.0: # Determines on what part of the terrain's mesh are walls
 	set(value):
 		wall_threshold = value
@@ -43,26 +48,6 @@ class_name MarchingSquaresTerrain
 				grass_mat.set_shader_parameter("use_base_color", true)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-# Legacy wall texture properties - kept for backward compatibility with existing scenes
-# These are no-ops: the unified 16-texture system is now used for both ground and walls
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_texture : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wall_noise_texture.res"):
-	set(value):
-		wall_texture = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_texture_2 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wall_noise_texture.res"):
-	set(value):
-		wall_texture_2 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_texture_3 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wall_noise_texture.res"):
-	set(value):
-		wall_texture_3 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_texture_4 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wall_noise_texture.res"):
-	set(value):
-		wall_texture_4 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_texture_5 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wall_noise_texture.res"):
-	set(value):
-		wall_texture_5 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_texture_6 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wall_noise_texture.res"):
-	set(value):
-		wall_texture_6 = value  # Store for persistence only - no shader effect
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ground_color : Color = Color("647851ff"):
 	set(value):
 		ground_color = value
@@ -70,26 +55,6 @@ class_name MarchingSquaresTerrain
 			terrain_material.set_shader_parameter("ground_albedo", value)
 			var grass_mat := grass_mesh.material as ShaderMaterial
 			grass_mat.set_shader_parameter("grass_base_color", value)
-# Legacy wall color properties - kept for backward compatibility with existing scenes
-# These are no-ops: walls now use the same color tinting as ground textures via the unified system
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_color : Color = Color("5e5645ff"):
-	set(value):
-		wall_color = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_color_2 : Color = Color("665950ff"):
-	set(value):
-		wall_color_2 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_color_3 : Color = Color("595240ff"):
-	set(value):
-		wall_color_3 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_color_4 : Color = Color("615745ff"):
-	set(value):
-		wall_color_4 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_color_5 : Color = Color("5c5442ff"):
-	set(value):
-		wall_color_5 = value  # Store for persistence only - no shader effect
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_color_6 : Color = Color("6b614cff"):
-	set(value):
-		wall_color_6 = value  # Store for persistence only - no shader effect
 
 # Base grass settings
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite : CompressedTexture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/grass_leaf_sprite.png"):
@@ -574,8 +539,6 @@ func _ensure_textures() -> void:
 		terrain_material.set_shader_parameter("vc_tex_gg", texture_6)
 	if grass_mat.get_shader_parameter("wind_texture") == null:
 		grass_mat.set_shader_parameter("wind_texture", placeholder_wind_texture)
-	if wall_texture and terrain_material.get_shader_parameter("wall_tex_1") == null:
-		terrain_material.set_shader_parameter("wall_tex_1", wall_texture)
 	if grass_sprite and grass_mat.get_shader_parameter("grass_texture") == null:
 		grass_mat.set_shader_parameter("grass_texture", grass_sprite)
 	if grass_sprite_tex_2 and grass_mat.get_shader_parameter("grass_texture_2") == null:
@@ -590,14 +553,6 @@ func _ensure_textures() -> void:
 		grass_mat.set_shader_parameter("grass_texture_6", grass_sprite_tex_6)
 	if terrain_material.get_shader_parameter("vc_tex_aa") == null:
 		terrain_material.set_shader_parameter("vc_tex_aa", void_texture)
-	
-	# Ensure wall albedo colors are set (required because setters don't run on load with defaults)
-	terrain_material.set_shader_parameter("wall_albedo", wall_color)
-	terrain_material.set_shader_parameter("wall_albedo_2", wall_color_2)
-	terrain_material.set_shader_parameter("wall_albedo_3", wall_color_3)
-	terrain_material.set_shader_parameter("wall_albedo_4", wall_color_4)
-	terrain_material.set_shader_parameter("wall_albedo_5", wall_color_5)
-	terrain_material.set_shader_parameter("wall_albedo_6", wall_color_6)
 
 
 # Applies all shader parameters and regenerates grass once

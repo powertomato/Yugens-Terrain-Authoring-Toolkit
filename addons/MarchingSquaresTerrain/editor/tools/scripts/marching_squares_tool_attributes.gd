@@ -24,17 +24,16 @@ enum SettingType {
 var terrain_settings_data : Dictionary = {
 	"dimensions": "Vector3i",
 	"cell_size": "Vector2",
-	"use_hard_textures": "CheckBox",
+	"blend_mode": "OptionButton",
 	"noise_hmap": "EditorResourcePicker",
-	# Default wall texture slot
-	"default_wall_texture_slot": "WallDropdown",
+	"default_wall_texture": "OptionButton",
 	# Grass settings
 	"animation_fps": "SpinBox",
 	"grass_subdivisions": "SpinBox",
 	"grass_size": "Vector2",
+	"use_ridge_texture": "CheckBox",
 	"ridge_threshold": "EditorSpinSlider",
 	"ledge_threshold": "EditorSpinSlider",
-	"use_ridge_texture": "CheckBox",
 }
 
 var plugin : MarchingSquaresTerrainPlugin
@@ -475,20 +474,25 @@ func add_setting(p_params: Dictionary) -> void:
 						ts_cont.add_child(checkbox, true)
 						hbox.add_child(ts_cont, true)
 						vbox.add_child(hbox, true)
-					"WallDropdown":
-						var wall_dropdown := OptionButton.new()
-						wall_dropdown.set_flat(true)
-						# Populate with texture names from the shared texture names resource
-						for tex_name in attribute_list.vp_tex_names.texture_names:
-							wall_dropdown.add_item(tex_name)
+					"OptionButton":
+						var option_button := OptionButton.new()
+						option_button.set_flat(true)
+						if setting == "default_wall_texture":
+							# Populate with texture names from the shared texture names resource
+							for tex_name in attribute_list.vp_tex_names.texture_names:
+								option_button.add_item(tex_name)
+						elif setting == "blend_mode":
+							option_button.add_item("Smoothed Triangles")
+							option_button.add_item("Hard Squares")
+							option_button.add_item("Hard Triangles")
 						# Set current selection from terrain node
-						wall_dropdown.selected = plugin.current_terrain_node.default_wall_texture_slot
-						wall_dropdown.item_selected.connect(func(index): _on_terrain_setting_changed(setting, index))
-						wall_dropdown.set_custom_minimum_size(Vector2(100, 35))
+						option_button.selected = plugin.current_terrain_node.get(setting)
+						option_button.item_selected.connect(func(index): _on_terrain_setting_changed(setting, index))
+						option_button.set_custom_minimum_size(Vector2(100, 35))
 						
 						ts_cont = CenterContainer.new()
 						ts_cont.set_custom_minimum_size(Vector2(100, 35))
-						ts_cont.add_child(wall_dropdown, true)
+						ts_cont.add_child(option_button, true)
 						hbox.add_child(ts_cont, true)
 						vbox.add_child(hbox, true)
 				if vbox.get_child_count() % 3 == 0:

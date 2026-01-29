@@ -774,8 +774,8 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			undo_redo.commit_action()
 		else:
 			# NON-QUICK PAINT MODE: Apply height + default wall texture
-			# Use the terrain's default_wall_texture_slot for wall colors
-			_set_vertex_colors(terrain.default_wall_texture_slot)
+			# Use the terrain's default_wall_texture for wall colors
+			_set_vertex_colors(terrain.default_wall_texture)
 			
 			var wall_color_pattern := {}
 			var wall_color_pattern_cc := {}

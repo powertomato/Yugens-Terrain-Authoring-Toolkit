@@ -675,7 +675,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	# In hard edge mode, non-ridge floor vertices use floor colors
 	# Ridge vertices MUST keep wall colors for correct wall texture display
 	var use_wall_colors := (not floor_mode) or is_ridge
-	if terrain_system.use_hard_textures and floor_mode and not is_ridge:
+	if terrain_system.blend_mode == 1 and floor_mode and not is_ridge:
 		use_wall_colors = false  # Only force floor colors for non-ridge floor vertices
 	var source_map_0 : PackedColorArray = wall_color_map_0 if use_wall_colors else color_map_0
 	var source_map_1 : PackedColorArray = wall_color_map_1 if use_wall_colors else color_map_1
@@ -686,7 +686,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 		color_0 = Color(1.0, 0.0, 0.0, 0.0)
 		source_map_0[cell_coords.y*dimensions.x + cell_coords.x] = Color(1.0, 0.0, 0.0, 0.0)
 	elif diag_midpoint:
-		if terrain_system.use_hard_textures:
+		if terrain_system.blend_mode == 1:
 			# Hard edge mode uses same color as cell's top-left corner
 			color_0 = source_map_0[cell_coords.y * dimensions.x + cell_coords.x]
 		else:
@@ -699,7 +699,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 			if ad_color.b > 0.99 or bc_color.b > 0.99: color_0.b = 1.0;
 			if ad_color.a > 0.99 or bc_color.a > 0.99: color_0.a = 1.0;
 	elif cell_is_boundary:
-		if terrain_system.use_hard_textures:
+		if terrain_system.blend_mode == 1:
 			# Use cell's corner color
 			color_0 = source_map_0[cell_coords.y * dimensions.x + cell_coords.x]
 		else:
@@ -724,7 +724,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	else:
 		var ab_color = lerp(source_map_0[cell_coords.y*dimensions.x + cell_coords.x], source_map_0[cell_coords.y*dimensions.x + cell_coords.x + 1], x)
 		var cd_color = lerp(source_map_0[(cell_coords.y + 1)*dimensions.x + cell_coords.x], source_map_0[(cell_coords.y + 1)*dimensions.x + cell_coords.x + 1], x)
-		if not terrain_system.use_hard_textures:
+		if terrain_system.blend_mode != 1:
 			color_0 = get_dominant_color(lerp(ab_color, cd_color, z)) # Use this for mixed triangles
 		else:
 			color_0 = source_map_0[cell_coords.y * dimensions.x + cell_coords.x] # Use this for perfect square tiles
@@ -735,7 +735,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 		color_1 = Color(1.0, 0.0, 0.0, 0.0)
 		source_map_1[cell_coords.y*dimensions.x + cell_coords.x] = Color(1.0, 0.0, 0.0, 0.0)
 	elif diag_midpoint:
-		if terrain_system.use_hard_textures:
+		if terrain_system.blend_mode == 1:
 			# Hard edge - again same... vertex uses same color as cell's top-left corner
 			color_1 = source_map_1[cell_coords.y * dimensions.x + cell_coords.x]
 		else:
@@ -748,7 +748,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 			if ad_color.b > 0.99 or bc_color.b > 0.99: color_1.b = 1.0;
 			if ad_color.a > 0.99 or bc_color.a > 0.99: color_1.a = 1.0;
 	elif cell_is_boundary:
-		if terrain_system.use_hard_textures:
+		if terrain_system.blend_mode == 1:
 			color_1 = source_map_1[cell_coords.y * dimensions.x + cell_coords.x]
 		else:
 			var height_range = cell_max_height - cell_min_height
@@ -768,7 +768,7 @@ func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, d
 	else:
 		var ab_color = lerp(source_map_1[cell_coords.y*dimensions.x + cell_coords.x], source_map_1[cell_coords.y*dimensions.x + cell_coords.x + 1], x)
 		var cd_color = lerp(source_map_1[(cell_coords.y + 1)*dimensions.x + cell_coords.x], source_map_1[(cell_coords.y + 1)*dimensions.x + cell_coords.x + 1], x)
-		if not terrain_system.use_hard_textures:
+		if terrain_system.blend_mode != 1:
 			color_1 = get_dominant_color(lerp(ab_color, cd_color, z)) # Use this for mixed triangles
 		else:
 			color_1 = source_map_1[cell_coords.y * dimensions.x + cell_coords.x] # Use this for perfect square tiles

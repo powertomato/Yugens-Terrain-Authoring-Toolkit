@@ -166,9 +166,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"cell_size":
 			if p_value is Vector2:
 				terrain.cell_size = p_value
-		"use_hard_textures":
-			if p_value is bool:
-				terrain.use_hard_textures = p_value
+		"blend_mode":
+			if p_value is int:
+				terrain.blend_mode = p_value
 		"wall_threshold":
 			if p_value is float:
 				terrain.wall_threshold = p_value
@@ -199,9 +199,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"use_ridge_texture":
 			if p_value is bool:
 				terrain.use_ridge_texture = p_value
-		"default_wall_texture_slot":
+		"default_wall_texture":
 			if p_value is int:
-				terrain.default_wall_texture_slot = p_value
+				terrain.default_wall_texture = p_value
 
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:

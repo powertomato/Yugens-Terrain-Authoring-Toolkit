@@ -16,7 +16,8 @@ group_uniforms;
 group_uniforms Blending;
 // true = Original behavior (single material, hard edges, works with "Perfect Square Tiles")
 // false = Smooth blending between materials (works with "Mixed Triangles")
-uniform bool use_hard_square_edges = false;
+uniform bool use_hard_textures = false;
+uniform int blend_mode = 0;
 uniform float blend_sharpness : hint_range(0.0, 10.0, 0.1) = 5.0;
 uniform float blend_noise_scale : hint_range(0.0, 50.0, 1.0) = 10.0;
 uniform float blend_noise_strength : hint_range(0.0, 1.0, 0.05) = 0.0;
@@ -310,11 +311,15 @@ void fragment() {
 		vec4 floor_color;
 
 		//use per-cell material to prevent provoking vertex triangule artefac at ridge boundaries
-		if (use_hard_square_edges) {
+		if (use_hard_textures) {
 			// Use mat_indices.x (cell_mat_a) instead of vertex-based material_index
 			// floor triangles always use floor material
-			int cell_dominant_mat = int(round(mat_indices.x * 15.0));
-			floor_color = sample_material_by_index(cell_dominant_mat, floor_uv);
+			if (blend_mode == 2)
+				floor_color = sample_material_by_index(material_index, floor_uv);
+			else {
+				int cell_dominant_mat = int(round(mat_indices.x * 15.0));
+				floor_color = sample_material_by_index(cell_dominant_mat, floor_uv);
+			}
 		}
 		// Boundary cells: use vertex colors (respects height-adjusted colors, no cross-height bleeding)
 		else if (use_vertex_colors > 0.5) {
@@ -394,7 +399,6 @@ void fragment() {
 			floor_color = color_a * weight_a + color_b * weight_b + color_c * weight_c;
 		}
 
-
 		ALBEDO = floor_color.rgb;
 		ALPHA = floor_color.a;
 	}
@@ -414,12 +418,8 @@ void fragment() {
 		vec4 wall_mat_x, wall_mat_z;
 
 		float effective_sharpness = blend_sharpness;
-		if (use_hard_square_edges) {
-			// Hard edges - Original calculations (issue: creates weird triangules at ridges)
-			//wall_mat_x = sample_wall_by_index(material_index, uv_x);
-			//wall_mat_z = sample_wall_by_index(material_index, uv_z);
-
-			//New attempt (like blend mode) (solves triangules at ridges, but introduce it at the borders)
+		if (use_hard_textures) {
+			// (like blend mode) (solves triangules at ridges, but introduce it at the borders)
 			wall_mat_x = blend_wall_materials(uv_x, vc_color_0, vc_color_1, effective_sharpness);
 			wall_mat_z = blend_wall_materials(uv_z, vc_color_0, vc_color_1, effective_sharpness);
 		} else {

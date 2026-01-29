@@ -12,10 +12,14 @@ class_name MarchingSquaresTerrain
 	set(value):
 		cell_size = value
 		terrain_material.set_shader_parameter("cell_size", value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_hard_textures : bool = false:
+@export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var blend_mode : int = 0:
 	set(value):
-		use_hard_textures = value
-		terrain_material.set_shader_parameter("use_hard_square_edges", value)
+		blend_mode = value
+		if value == 1 or value == 2:
+			terrain_material.set_shader_parameter("use_hard_textures", true)
+		else:
+			terrain_material.set_shader_parameter("use_hard_textures", false)
+		terrain_material.set_shader_parameter("blend_mode", value)
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.regenerate_all_cells()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_threshold : float = 0.0: # Determines on what part of the terrain's mesh are walls
@@ -428,7 +432,7 @@ class_name MarchingSquaresTerrain
 
 # Default wall texture slot (0-15) used when no quick paint is active
 # Default is 5 (Texture 6 in 1-indexed UI terms)
-@export_storage var default_wall_texture_slot : int = 5
+@export_storage var default_wall_texture : int = 5
 
 var void_texture := preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/void_texture.tres")
 var placeholder_wind_texture := preload("res://addons/MarchingSquaresTerrain/resources/plugin materials/wind_noise_texture.tres") # Change to your own texture

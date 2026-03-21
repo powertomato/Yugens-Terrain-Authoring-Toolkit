@@ -50,7 +50,7 @@ func _enter_tree() -> void:
 
 
 func _deferred_enter_tree() -> void:
-	if not Engine.is_editor_hint():
+	if not EngineWrapper.instance.is_editor():
 		push_error("Attempt to load during runtime (NOT SUPPORTED IN CURRENT BUILD)")
 		return
 	

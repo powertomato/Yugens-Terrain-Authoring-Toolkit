@@ -45,7 +45,7 @@ enum StorageMode {
 ## Note: Manually setting a path locks the save location even if you rename the terrain node later.
 @export_dir var data_directory : String = "":
 	get():
-		if Engine.is_editor_hint() and data_directory.is_empty():
+		if EngineWrapper.instance.is_editor() and data_directory.is_empty():
 			var auto_path := MSTDataHandler.generate_data_directory(self)
 			if not auto_path.is_empty():
 				data_directory = auto_path
@@ -77,7 +77,7 @@ enum StorageMode {
 	set(value):
 		dimensions = value
 		terrain_material.set_shader_parameter("chunk_size", value)
-		if Engine.is_editor_hint():
+		if EngineWrapper.instance.is_editor():
 			MarchingSquaresTerrainPlugin.instance.brush_size = MarchingSquaresTerrainPlugin.instance.brush_size * ((value.x / 33) + (value.y / 33)) / 2.0
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var cell_size : Vector2 = Vector2(2.0, 2.0): # XZ Unit size of each cell
 	set(value):
@@ -514,7 +514,7 @@ func _init() -> void:
 func _notification(what: int) -> void:
 	# Save all dirty chunks to external storage before scene save
 	if what == NOTIFICATION_EDITOR_PRE_SAVE:
-		if Engine.is_editor_hint():
+		if EngineWrapper.instance.is_editor():
 			MSTDataHandler.save_all_chunks(self)
 
 
@@ -523,7 +523,7 @@ func _enter_tree() -> void:
 
 
 func _initialize_data_directory() -> void:
-	if Engine.is_editor_hint() and (data_directory.is_empty() or not MSTDataHandler.is_data_directory_unique(self)):
+	if EngineWrapper.instance.is_editor() and (data_directory.is_empty() or not MSTDataHandler.is_data_directory_unique(self)):
 		var auto_path := MSTDataHandler.generate_data_directory(self)
 		if not auto_path.is_empty():
 			data_directory = auto_path
@@ -555,7 +555,7 @@ func _deferred_enter_tree() -> void:
 	# Load external data if storage was previously initialized
 	if _storage_initialized:
 		MSTDataHandler.load_terrain_data(self)
-	elif Engine.is_editor_hint() and MSTDataHandler.needs_migration(self):
+	elif EngineWrapper.instance.is_editor() and MSTDataHandler.needs_migration(self):
 		# Auto-migrate embedded data to external storage (editor only)
 		MSTDataHandler.migrate_to_external_storage(self)
 	
@@ -655,7 +655,7 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin: Mar
 		coords.y * ((dimensions.z - 1) * cell_size.y)
 	)
 	
-	if Engine.is_editor_hint():
+	if EngineWrapper.instance.is_editor():
 		var editor_interface = Engine.get_singleton('EditorInterface')
 		_set_owner_recursive(chunk, editor_interface.get_edited_scene_root())
 	else:

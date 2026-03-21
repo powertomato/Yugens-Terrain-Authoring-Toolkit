@@ -33,7 +33,7 @@ static func generate_data_directory(terrain: MarchingSquaresTerrain) -> String:
 	if not tree:
 		return ""  # Node not in scene tree yet
 	
-	var scene_root := tree.edited_scene_root if Engine.is_editor_hint() else tree.current_scene
+	var scene_root := tree.edited_scene_root if EngineWrapper.instance.is_editor() else tree.current_scene
 	if not scene_root or scene_root.scene_file_path.is_empty():
 		return ""
 	
@@ -46,7 +46,7 @@ static func generate_data_directory(terrain: MarchingSquaresTerrain) -> String:
 
 ## Check if a terrains data directory is unique
 static func is_data_directory_unique(terrain: MarchingSquaresTerrain) -> bool:
-	if not (Engine.is_editor_hint() and terrain.is_inside_tree()):
+	if not (EngineWrapper.instance.is_editor() and terrain.is_inside_tree()):
 		return true
 	var scene_root := terrain.get_tree().edited_scene_root
 	var dirs := _collect_terrain_dirs_recursive(scene_root)
@@ -477,7 +477,7 @@ static func cleanup_orphaned_terrain_directories(terrain: MarchingSquaresTerrain
 	if not tree:
 		return
 	
-	var scene_root := tree.edited_scene_root if Engine.is_editor_hint() else tree.current_scene
+	var scene_root := tree.edited_scene_root if EngineWrapper.instance.is_editor() else tree.current_scene
 	if not scene_root or scene_root.scene_file_path.is_empty():
 		return
 	

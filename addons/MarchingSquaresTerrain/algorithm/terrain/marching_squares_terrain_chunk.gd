@@ -125,7 +125,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 						if _child is CollisionShape3D:
 							_child.set_visible(false)
 	
-	if not Engine.is_editor_hint() and terrain_system.enable_runtime_texture_baking:
+	if not EngineWrapper.instance.is_editor() and terrain_system.enable_runtime_texture_baking:
 		var baker := MarchingSquaresGeometryBaker.new()
 		baker.polygon_texture_resolution = terrain_system.polygon_texture_resolution
 		baker.finished.connect(func(mesh_: Mesh, _original: MeshInstance3D, img: Image):
@@ -153,7 +153,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 
 
 func _notification(what: int) -> void:
-	if not Engine.is_editor_hint():
+	if not EngineWrapper.instance.is_editor():
 		return
 	
 	match what:
@@ -231,7 +231,7 @@ func _exit_tree() -> void:
 	_temp_collision_shapes.clear()
 	
 	# Clear owner on ALL collision nodes to prevent serialization edge cases
-	if Engine.is_editor_hint():
+	if EngineWrapper.instance.is_editor():
 		for child in get_children():
 			if child is StaticBody3D:
 				child.owner = null
@@ -267,7 +267,7 @@ func regenerate_mesh(use_threads: bool = false):
 		add_child(grass_planter)
 		grass_planter._chunk = self
 		grass_planter.setup(self)
-		if Engine.is_editor_hint():
+		if EngineWrapper.instance.is_editor():
 			grass_planter.owner = Engine.get_singleton("EditorInterface").get_edited_scene_root()
 		elif is_inside_tree():
 			grass_planter.owner = get_tree().root
@@ -605,7 +605,7 @@ func _recreate_collision_body() -> void:
 	add_child(body)
 	
 	# Set owner for editor visibility at first, but we clear it later
-	if Engine.is_editor_hint():
+	if EngineWrapper.instance.is_editor():
 		var scene_root = Engine.get_singleton("EditorInterface").get_edited_scene_root()
 		if scene_root:
 			body.owner = scene_root

@@ -163,7 +163,7 @@ func _safe_initialize() -> bool:
 	if is_initialized:
 		return true
 	
-	if not Engine.is_editor_hint():
+	if not EngineWrapper.instance.is_editor():
 		initialization_error = "Plugin was initialized during runtime"
 		return false
 	

@@ -145,7 +145,6 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 		baker.bake_geometry_texture(self, get_tree())
 	
 	if _temp_grass_multimesh:
-		grass_planter.setup(self, false)
 		grass_planter.multimesh = _temp_grass_multimesh
 	else:
 		grass_planter.setup(self, not terrain_system.bake_grass)

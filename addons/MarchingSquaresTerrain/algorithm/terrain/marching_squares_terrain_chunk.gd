@@ -141,7 +141,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 			elif mat is ShaderMaterial:
 				mat.set_shader_parameter("texture_albedo", ImageTexture.create_from_image(img))
 			mesh.surface_set_material(0, mat)
-		)
+		, CONNECT_ONE_SHOT)
 		baker.bake_geometry_texture(self, get_tree())
 	
 	if _temp_grass_multimesh:
@@ -643,8 +643,5 @@ func regenerate_all_cells(use_threads: bool):
 		dialog.connect("file_selected", file_selected)
 		dialog.popup_centered()
 	
-	baker.finished.connect(f)
+	baker.finished.connect(f, CONNECT_ONE_SHOT)
 	baker.bake_geometry_texture(self, tree)
-	
-	await baker.finished
-	baker.finished.disconnect(f)

@@ -277,7 +277,9 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	# Restore baked assets if present
 	if data.mesh:
 		chunk.mesh = data.mesh
-	
+	elif chunk.terrain_system.storage_mode == MarchingSquaresTerrain.StorageMode.BAKED:
+		push_warning("Baking enabled, but terrain-ressource does not contain mesh data")
+		
 	if chunk.terrain_system.bake_grass and not data.grass_multimesh:
 		push_warning("Grass baking enabled, but terrain-ressource does not contain grass data")
 	

@@ -41,7 +41,7 @@ var grass_mask_map : PackedColorArray # Stores if a cell should have grass or no
 
 var merge_threshold : float = MERGE_MODE[Mode.POLYHEDRON]
 
-var grass_planter : MarchingSquaresGrassPlanter = load("uid://b0dc71ti1ofmh").instantiate()
+var grass_planter : MarchingSquaresGrassPlanter
 
 var global_position_cached : Vector3 = Vector3.ZERO
 
@@ -146,9 +146,6 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 	
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
-	else:
-		grass_planter.setup(self, not terrain_system.bake_grass)
-		grass_planter.regenerate_all_cells()
 
 
 func _notification(what: int) -> void:

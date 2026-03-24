@@ -579,6 +579,10 @@ func _recreate_collision_body() -> void:
 	if not is_inside_tree() or _temp_collision_shapes.is_empty():
 		_temp_collision_shapes.clear()
 		return
+		
+	for child in get_children():
+		if child is StaticBody3D:
+			child.free()
 	
 	# Only create ONE body with the FIRST shape
 	var shape : ConcavePolygonShape3D = _temp_collision_shapes[0]

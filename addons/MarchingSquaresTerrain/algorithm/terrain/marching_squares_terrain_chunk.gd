@@ -47,6 +47,7 @@ const MERGE_MODE := {
 			merge_threshold = MERGE_MODE[mode]
 			regenerate_all_cells(true)
 @export_storage var height_map : Array # Stores the heights from the heightmap
+@export_storage var xz_offset_map : Array # Stores XZ offsets (Vector2) for each point on the terrain
 #region cell_geometry storage
 # Color maps are now ephemeral and created at runtime
 # Persisted via MSTDataHandler
@@ -116,6 +117,7 @@ var _temp_grass_multimesh : MultiMesh
 var _temp_collision_shapes : Array[ConcavePolygonShape3D] = []  # COMMENT: Old scenes may have duplicates
 var _temp_height_map : Array  # Source data - saved to external storage, not scene file
 var _temp_navmesh_permission : PackedByteArray = PackedByteArray()
+var _temp_xz_offset_map : Array  # Source data - saved to external storage, not scene file
 # Runtime cache only — never serialized. Restored after save so grass cooking can resume.
 var _temp_cell_geometry : Dictionary = {}
 #endregion
@@ -273,6 +275,16 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 				break
 	if need_hm:
 		generate_height_map()
+	# Validate xz_offset_map shape (chunks created before XZ offsets existed have none)
+	var need_xz := true
+	if xz_offset_map and xz_offset_map is Array and xz_offset_map.size() == dimensions.z:
+		need_xz = false
+		for row in xz_offset_map:
+			if not (row is Array) or row.size() != dimensions.x:
+				need_xz = true
+				break
+	if need_xz:
+		generate_xz_offset_map()
 	# Validate color maps sizes
 	if not (color_map_0 is PackedColorArray) or color_map_0.size() !=  dimensions.z * dimensions.x or not (color_map_1 is PackedColorArray) or color_map_1.size() != dimensions.z * dimensions.x:
 		generate_color_maps()
@@ -373,6 +385,8 @@ func _notification(what: int) -> void:
 			height_map = []
 			_temp_navmesh_permission = navmesh_permission
 			navmesh_permission = PackedByteArray()
+			_temp_xz_offset_map = xz_offset_map
+			xz_offset_map = []
 			
 			# Stash then clear so Vector2i keys are never serialized into the scene.
 			_temp_cell_geometry = cell_geometry
@@ -413,6 +427,11 @@ func _notification(what: int) -> void:
 			if not _temp_navmesh_permission.is_empty():
 				navmesh_permission = _temp_navmesh_permission
 				_temp_navmesh_permission = PackedByteArray()
+			
+			# Restore xz_offset_map
+			if _temp_xz_offset_map:
+				xz_offset_map = _temp_xz_offset_map
+				_temp_xz_offset_map = []
 			
 			# Restore mesh
 			if _temp_mesh:
@@ -475,6 +494,7 @@ func _exit_tree() -> void:
 	# Clear temp references
 	_temp_height_map = []
 	_temp_navmesh_permission = PackedByteArray()
+	_temp_xz_offset_map = []
 	_temp_mesh = null
 	_temp_grass_multimesh = null
 	_temp_cell_geometry = {}
@@ -578,11 +598,16 @@ func _create_cell_for_geometry(cell_coords: Vector2i):
 		h11 = h00
 
 	var color_helper := MSTVertexColorHelper.new()
+	# Corner XZ offsets (Vector2.ZERO when the map is missing or malformed)
+	var o00 := _get_xz_offset_safe(z, x)
+	var o01 := _get_xz_offset_safe(z, x + 1)
+	var o10 := _get_xz_offset_safe(z + 1, x)
+	var o11 := _get_xz_offset_safe(z + 1, x + 1)
 	var cell
 	if terrain_system != null and terrain_system.prefab_set != null:
-		cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+		cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
 	else:
-		cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+		cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
 	color_helper.chunk = self
 	color_helper.cell = cell
 	return cell
@@ -941,11 +966,16 @@ func generate_terrain_cells(use_threads: bool):
 				h11 = float(height_map[z+1][x+1])
 			else:
 				h11 = h00
+			# Corner XZ offsets (Vector2.ZERO when the map is missing or malformed)
+			var o00 := _get_xz_offset_safe(z, x)
+			var o01 := _get_xz_offset_safe(z, x + 1)
+			var o10 := _get_xz_offset_safe(z + 1, x)
+			var o11 := _get_xz_offset_safe(z + 1, x + 1)
 			var cell
 			if terrain_system != null and terrain_system.prefab_set != null:
-				cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+				cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
 			else:
-				cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+				cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
 			color_helper.chunk = self
 			color_helper.cell = cell
 			
@@ -1055,6 +1085,16 @@ func generate_height_map(base_height: float = 0.0):
 				height_map[z][x] = base_height + (noise_sample * dimensions.y)
 
 
+func generate_xz_offset_map():
+	xz_offset_map = []
+	xz_offset_map.resize(dimensions.z)
+	for z in range(dimensions.z):
+		xz_offset_map[z] = []
+		xz_offset_map[z].resize(dimensions.x)
+		for x in range(dimensions.x):
+			xz_offset_map[z][x] = Vector2.ZERO
+
+
 func generate_color_maps():
 	color_map_0 = PackedColorArray()
 	color_map_1 = PackedColorArray()
@@ -1161,6 +1201,20 @@ func get_height(cc: Vector2i) -> float:
 	return height_map[cc.y][cc.x]
 
 
+func get_xz_offset(cc: Vector2i) -> Vector2:
+	return xz_offset_map[cc.y][cc.x]
+
+
+## Like get_xz_offset, but tolerates a missing/malformed xz_offset_map (returns Vector2.ZERO).
+func _get_xz_offset_safe(z: int, x: int) -> Vector2:
+	if not (xz_offset_map is Array) or z < 0 or z >= xz_offset_map.size():
+		return Vector2.ZERO
+	var row = xz_offset_map[z]
+	if not (row is Array) or x < 0 or x >= row.size():
+		return Vector2.ZERO
+	return row[x]
+
+
 func get_color_0(cc: Vector2i) -> Color:
 	return color_map_0[cc.y*dimensions.x + cc.x]
 
@@ -1197,6 +1251,15 @@ func get_grass_mask(cc: Vector2i) -> Color:
 func draw_height(x: int, z: int, y: float):
 	# Contains chunks that were updated
 	height_map[z][x] = y
+	mark_dirty()
+	notify_needs_update(z, x)
+	notify_needs_update(z, x-1)
+	notify_needs_update(z-1, x)
+	notify_needs_update(z-1, x-1)
+
+
+func draw_xz_offset(x: int, z: int, offset: Vector2):
+	xz_offset_map[z][x] = offset
 	mark_dirty()
 	notify_needs_update(z, x)
 	notify_needs_update(z, x-1)

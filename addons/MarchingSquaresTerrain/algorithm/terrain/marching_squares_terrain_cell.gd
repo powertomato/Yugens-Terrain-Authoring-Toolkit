@@ -44,6 +44,12 @@ var _by : float
 var _cy : float
 var _dy : float
 
+# XZ offsets for the four corners (top-left, top-right, bottom-left, bottom-right)
+var offset_a : Vector2  # Top-left offset
+var offset_b : Vector2  # Top-right offset
+var offset_c : Vector2  # Bottom-left offset
+var offset_d : Vector2  # Bottom-right offset
+
 var ab : bool
 var bd : bool
 var cd : bool
@@ -104,13 +110,18 @@ var color_helper
 
 
 # chunk_: MarchingSquaresTerrainChunk, color_helper_: MarchingSquaresTerrainVertexColorHelper
-func _init(chunk_, color_helper_, y_top_left: float, y_top_right: float, y_bottom_left: float, y_bottom_right: float, merge_threshold_: float) -> void:
+func _init(chunk_, color_helper_, y_top_left: float, y_top_right: float, y_bottom_left: float, y_bottom_right: float, merge_threshold_: float, offset_top_left: Vector2 = Vector2.ZERO, offset_top_right: Vector2 = Vector2.ZERO, offset_bottom_left: Vector2 = Vector2.ZERO, offset_bottom_right: Vector2 = Vector2.ZERO) -> void:
 	chunk = chunk_
 	color_helper = color_helper_
 	_ay = y_top_left
 	_by = y_top_right
 	_cy = y_bottom_left
 	_dy = y_bottom_right
+	
+	offset_a = offset_top_left
+	offset_b = offset_top_right
+	offset_c = offset_bottom_left
+	offset_d = offset_bottom_right
 	
 	var cell_scale_factor = clamp(((chunk_.terrain_system.cell_size.x + chunk_.terrain_system.cell_size.y) / 4.0), 0.3, 1.0)
 	var dimensions_scale_factor = clamp((((chunk_.terrain_system.dimensions.x / 33) + (chunk_.terrain_system.dimensions.z / 33)) / 2.0), 0.5, 2.0)

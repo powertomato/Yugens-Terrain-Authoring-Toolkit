@@ -297,7 +297,11 @@ func add_point(x: float, y: float, z: float, u: float, v: float, u2: float = INF
 		x = 1 - z
 		z = temp
 	
-	var vert := Vector3((cell_coords.x+x) * chunk.cell_size.x, y, (cell_coords.y+z) * chunk.cell_size.y)
+	# Corner XZ offsets, bilinearly interpolated across the cell.
+	# (x, z) are in the unrotated cell frame here, matching the unrotated corner offsets.
+	var xz_offset := offset_a.lerp(offset_b, x).lerp(offset_c.lerp(offset_d, x), z)
+	
+	var vert := Vector3((cell_coords.x+x) * chunk.cell_size.x + xz_offset.x, y, (cell_coords.y+z) * chunk.cell_size.y + xz_offset.y)
 	var uv : Vector2
 	var uv2 : Vector2
 	var using_legacy_uv2 := is_finite(u2) and is_finite(v2)

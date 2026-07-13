@@ -75,6 +75,13 @@ var cell_generation_mutex : Mutex = Mutex.new()
 
 var bake_material : ShaderMaterial = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/mst_terrain_baked.tres")
 
+# In the editor, collision rebuilds are debounced: brush strokes and gizmo
+# drags regenerate the mesh on every mouse-motion event, but the (expensive)
+# collision cook only needs to happen once the stroke settles.
+# The brush raycasts against the previous collision in the meantime.
+const COLLISION_DEBOUNCE_MS : int = 250
+var _collision_rebuild_deadline_ms : int = -1
+
 #region chunk variables
 # Size of the 2 dimensional cell array (xz value) and y scale (y value)
 var dimensions : Vector3i:
@@ -370,6 +377,10 @@ func _notification(what: int) -> void:
 	
 	match what:
 		NOTIFICATION_EDITOR_PRE_SAVE:
+			# Make sure a debounced collision rebuild is not still pending, so the
+			# saved scene captures up-to-date collision shapes
+			_flush_pending_collision_rebuild()
+			
 			_scene_save_in_progress = true
 			_grass_regen_queued = false
 			if grass_planter:
@@ -634,13 +645,7 @@ func regenerate_mesh(use_threads: bool =  false):
 	_rebuild_dirty_mesh_tiles()
 	_apply_chunk_surface_material()
 	
-	for child in get_children():
-		if child is StaticBody3D:
-			child.free()
-	if terrain_system != null and terrain_system.has_method("_queue_chunk_collision_rebuild"):
-		terrain_system._queue_chunk_collision_rebuild(chunk_coords)
-	else:
-		rebuild_collision()
+	_schedule_collision_rebuild()
 	if grass_mode == GrassMode.GRASS and grass_planter != null and not _scene_save_in_progress:
 		var dirty_grass_cells : Array = _dirty_grass_cells.keys()
 		_dirty_grass_cells.clear()
@@ -654,6 +659,45 @@ func regenerate_mesh(use_threads: bool =  false):
 	
 	if terrain_system != null and terrain_system.has_method("_invalidate_terrain_lod_chunk"):
 		terrain_system._invalidate_terrain_lod_chunk(chunk_coords)
+
+
+## Rebuilds the collision body from the current mesh: debounced in the editor
+## (interactive tools regenerate per mouse-motion event), immediate at runtime.
+## The brush keeps raycasting against the previous collision in the meantime.
+func _schedule_collision_rebuild() -> void:
+	if EngineWrapper.instance.is_editor():
+		_collision_rebuild_deadline_ms = Time.get_ticks_msec() + COLLISION_DEBOUNCE_MS
+		set_process(true)
+	else:
+		_request_collision_rebuild()
+
+
+func _process(_delta: float) -> void:
+	if _collision_rebuild_deadline_ms < 0:
+		set_process(false)
+		return
+	if Time.get_ticks_msec() >= _collision_rebuild_deadline_ms:
+		_collision_rebuild_deadline_ms = -1
+		set_process(false)
+		_request_collision_rebuild()
+
+
+## Hands the rebuild to the collision queue of the terrain (one chunk per editor
+## frame, keeps the debug stats current), or rebuilds directly without a terrain.
+func _request_collision_rebuild() -> void:
+	if terrain_system != null and terrain_system.has_method("_queue_chunk_collision_rebuild"):
+		terrain_system._queue_chunk_collision_rebuild(chunk_coords)
+	else:
+		rebuild_collision()
+
+
+## Runs a pending debounced collision rebuild immediately (e.g. before save).
+func _flush_pending_collision_rebuild() -> void:
+	if _collision_rebuild_deadline_ms < 0:
+		return
+	_collision_rebuild_deadline_ms = -1
+	set_process(false)
+	rebuild_collision()
 
 
 func _clear_mesh_build_arrays() -> void:
@@ -1672,6 +1716,7 @@ func mark_dirty() -> void:
 func force_full_collision_rebuild() -> void:
 	_temp_collision_shapes.clear()
 	regenerate_mesh(false)
+	_flush_pending_collision_rebuild()
 
 
 func get_collision_triangle_count() -> int:
@@ -1685,6 +1730,8 @@ func get_collision_triangle_count() -> int:
 
 
 func rebuild_collision() -> void:
+	# A direct rebuild supersedes any pending debounced one
+	_collision_rebuild_deadline_ms = -1
 	if not is_inside_tree():
 		return
 	for child in get_children():

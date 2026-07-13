@@ -722,7 +722,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	var custom_0_values : PackedColorArray = cell_geometry["color_1s"] # CUSTOM0
 	var custom_1_values : PackedColorArray = cell_geometry["custom_1_values"] # CUSTOM1
 	var mat_blend : PackedColorArray = cell_geometry["mat_blend"] # CUSTOM2
-	var is_floor : Array = cell_geometry["is_floor"]
+	var is_floor : PackedByteArray = cell_geometry["is_floor"]
 	
 	for i in range(0, len(verts), 3):
 		if i + 2 >=  len(verts):

@@ -571,7 +571,7 @@ func _reset_cell_geometry(cell_coords: Vector2i) -> void:
 		"color_1s": PackedColorArray(),
 		"custom_1_values": PackedColorArray(),
 		"mat_blend": PackedColorArray(),
-		"is_floor": [],
+		"is_floor": PackedByteArray(),
 	}
 
 
@@ -759,7 +759,7 @@ func _build_mesh_surface_arrays_for_tile(tile_coords: Vector2i) -> Array:
 			var color_1s : PackedColorArray = entry.get("color_1s", PackedColorArray())
 			var custom_values : PackedColorArray = entry.get("custom_1_values", PackedColorArray())
 			var mat_blends : PackedColorArray = entry.get("mat_blend", PackedColorArray())
-			var floor_flags : Array = entry.get("is_floor", [])
+			var floor_flags = entry.get("is_floor", PackedByteArray())
 			for i in range(verts.size()):
 				tool.set_smooth_group(0 if bool(floor_flags[i]) else -1)
 				tool.set_uv(uvs[i])
@@ -907,85 +907,28 @@ func generate_terrain_cells(use_threads: bool):
 	for z in range(dimensions.z - 1):
 		for x in range(dimensions.x - 1):
 			var cell_coords := Vector2i(x, z)
-			var work_load : Callable
-			# If geometry did not change, copy already generated geometry and skip this cell
+			# If geometry did not change, keep the cached geometry for this cell. The mesh
+			# tiles are rebuilt from cell_geometry afterwards, so nothing has to be copied here.
 			if not needs_update[z][x]:
-				# If cached geometry is missing or malformed, fallback to regenerating this cell.
-				if not cell_geometry.has(cell_coords) or not _cached_cell_geometry_is_valid(cell_coords):
-					needs_update[z][x] = true
-					# fall through to generation
-					
-					# continue to next iteration so generation handles it
-					# (avoid executing the cached-copy branch)
-					# Note: do NOT call continue here because we want the generation code below to run in this iteration.
-					pass
-				else:
-					if use_threads:
-						work_load = func():
-							cell_generation_mutex.lock()
-							_append_cached_cell_geometry(cell_coords)
-							cell_generation_mutex.unlock()
-						thread_pool.enqueue(work_load)
-					else:
-						_append_cached_cell_geometry(cell_coords)
+				# If cached geometry is missing or malformed, fall back to regenerating this cell.
+				if cell_geometry.has(cell_coords) and _cached_cell_geometry_is_valid(cell_coords):
+					_append_cached_cell_geometry(cell_coords)
 					continue
+				needs_update[z][x] = true
 			
 			# Cell is now being updated
 			needs_update[z][x] = false
 			
-			# If geometry did change or none exists yet,
-			# Create an entry for this cell (will also override any existing one)
-			cell_geometry[cell_coords] = {
-				"verts": PackedVector3Array(),
-				"uvs": PackedVector2Array(),
-				"uv2s": PackedVector2Array(),
-				"color_0s": PackedColorArray(),
-				"color_1s": PackedColorArray(),
-				"custom_1_values": PackedColorArray(),
-				"mat_blend": PackedColorArray(),
-				"is_floor": [],
-			}
+			# Create the entry on the main thread (also overrides any existing one)
+			# so that workers never need to resize the dictionary concurrently.
+			cell_geometry[cell_coords] = {}
 			
-			var color_helper := MSTVertexColorHelper.new()
-			# Defensive: guard against malformed/serialized height_map rows
-			var h00 := 0.0
-			var h01 := 0.0
-			var h10 := 0.0
-			var h11 := 0.0
-			if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x:
-				h00 = float(height_map[z][x])
-			if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x+1:
-				h01 = float(height_map[z][x+1])
-			else:
-				h01 = h00
-			if height_map is Array and height_map.size() > z+1 and height_map[z+1] is Array and height_map[z+1].size() > x:
-				h10 = float(height_map[z+1][x])
-			else:
-				h10 = h00
-			if height_map is Array and height_map.size() > z+1 and height_map[z+1] is Array and height_map[z+1].size() > x+1:
-				h11 = float(height_map[z+1][x+1])
-			else:
-				h11 = h00
-			# Corner XZ offsets (Vector2.ZERO when the map is missing or malformed)
-			var o00 := _get_xz_offset_safe(z, x)
-			var o01 := _get_xz_offset_safe(z, x + 1)
-			var o10 := _get_xz_offset_safe(z + 1, x)
-			var o11 := _get_xz_offset_safe(z + 1, x + 1)
-			var cell
-			if terrain_system != null and terrain_system.prefab_set != null:
-				cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
-			else:
-				cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
-			color_helper.chunk = self
-			color_helper.cell = cell
-			
-			work_load =  func():
-				cell.generate_geometry(cell_coords)
+			var work_load := _generate_cell.bind(cell_coords)
 			if use_threads:
 				thread_pool.enqueue(work_load)
 			else:
 				work_load.call()
-	
+
 	if use_threads:
 		thread_pool.start()
 		thread_pool.wait()
@@ -1004,7 +947,7 @@ func _append_cached_cell_geometry(cell_coords: Vector2i) -> void:
 	var color_1s : PackedColorArray = entry["color_1s"]
 	var custom_1_values : PackedColorArray = entry["custom_1_values"]
 	var mat_blend : PackedColorArray = entry["mat_blend"]
-	var is_floor : Array = entry["is_floor"]
+	var is_floor = entry["is_floor"]
 	for i in range(verts.size()):
 		_append_mesh_vertex(verts[i], uvs[i], uv2s[i], color_0s[i], color_1s[i], custom_1_values[i], mat_blend[i], bool(is_floor[i]))
 
@@ -1024,6 +967,19 @@ func _cached_cell_geometry_is_valid(cell_coords: Vector2i) -> bool:
 		and entry["is_floor"].size() == count
 
 
+# Generates the geometry of a single cell into its cell_geometry entry. Safe to run on a
+# worker thread: it only reads the shared source maps and writes into the entry of this
+# cell (see add_polygons).
+func _generate_cell(cell_coords: Vector2i) -> void:
+	var cell = _create_cell_for_geometry(cell_coords)
+	if cell == null:
+		return
+	cell.generate_geometry(cell_coords)
+
+
+# Stores the generated geometry of one cell. Coordinates are relative to the
+# top-left corner (not mesh origin relative).
+# UV.x is closeness to the bottom of an edge. UV.Y is closeness to the edge of a cliff
 func add_polygons(
 	cell_coords : Vector2i,
 	pts : PackedVector3Array,
@@ -1044,25 +1000,28 @@ func add_polygons(
 		assert(pts.size() == mat_blends.size())
 		assert(pts.size() == floors.size())
 		
-		cell_generation_mutex.lock()
-		for i in range(pts.size()):
-			_add_point(cell_coords, pts[i], uvs[i], uv2s[i], color_0s[i], color_1s[i], custom_1_values[i], mat_blends[i], floors[i])
-		cell_generation_mutex.unlock()
-
-
-# Adds a point. Coordinates are relative to the top-left corner (not mesh origin relative)
-# UV.x is closeness to the bottom of an edge. UV.Y is closeness to the edge of a cliff
-func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2, color_0: Color, color_1: Color, custom_1_value: Color, mat_blend: Color, is_floor: bool):
-	_append_mesh_vertex(vert, uv, uv2, color_0, color_1, custom_1_value, mat_blend, is_floor)
-	
-	cell_geometry[cell_coords]["verts"].append(vert)
-	cell_geometry[cell_coords]["uvs"].append(uv)
-	cell_geometry[cell_coords]["uv2s"].append(uv2)
-	cell_geometry[cell_coords]["color_0s"].append(color_0)
-	cell_geometry[cell_coords]["color_1s"].append(color_1)
-	cell_geometry[cell_coords]["custom_1_values"].append(custom_1_value)
-	cell_geometry[cell_coords]["mat_blend"].append(mat_blend)
-	cell_geometry[cell_coords]["is_floor"].append(is_floor)
+		# Store the arrays wholesale instead of appending vertex by vertex. The entry
+		# itself is created on the main thread before workers start, so only this
+		# cell's worker touches it.
+		if not cell_geometry.has(cell_coords):
+			cell_geometry[cell_coords] = {}
+		var geo : Dictionary = cell_geometry[cell_coords]
+		geo["verts"] = pts
+		geo["uvs"] = uvs
+		geo["uv2s"] = uv2s
+		geo["color_0s"] = color_0s
+		geo["color_1s"] = color_1s
+		geo["custom_1_values"] = custom_1_values
+		geo["mat_blend"] = mat_blends
+		geo["is_floor"] = floors
+		
+		# Packed mesh arrays are only collected on request (see _collect_mesh_arrays).
+		# They are shared between the cell workers, hence the mutex.
+		if _collect_mesh_arrays:
+			cell_generation_mutex.lock()
+			for i in range(pts.size()):
+				_append_mesh_vertex(pts[i], uvs[i], uv2s[i], color_0s[i], color_1s[i], custom_1_values[i], mat_blends[i], floors[i] != 0)
+			cell_generation_mutex.unlock()
 
 #region cell_geometry generators (on being empty)
 
@@ -1772,7 +1731,7 @@ func get_nav_walkable_faces_for_permission(max_slope_degrees: float, permission:
 		if not entry.has("verts") or not entry.has("is_floor"):
 			continue
 		var verts : PackedVector3Array = entry["verts"]
-		var is_floor : Array = entry["is_floor"]
+		var is_floor = entry["is_floor"]
 		if verts.is_empty() or is_floor.is_empty():
 			continue
 		
@@ -2011,7 +1970,7 @@ func _append_exact_cell_floor_triangles(faces: Array[Vector3], cell_coords: Vect
 	if not entry.has("verts") or not entry.has("is_floor"):
 		return false
 	var verts: PackedVector3Array = entry["verts"]
-	var is_floor: Array = entry["is_floor"]
+	var is_floor = entry["is_floor"]
 	if verts.is_empty() or is_floor.is_empty():
 		return false
 	
@@ -2037,7 +1996,7 @@ func _append_exact_cell_wall_triangles(faces: Array[Vector3], cell_coords: Vecto
 	if not entry.has("verts") or not entry.has("is_floor"):
 		return false
 	var verts : PackedVector3Array = entry["verts"]
-	var is_floor : Array = entry["is_floor"]
+	var is_floor = entry["is_floor"]
 	if verts.is_empty() or is_floor.is_empty():
 		return false
 	

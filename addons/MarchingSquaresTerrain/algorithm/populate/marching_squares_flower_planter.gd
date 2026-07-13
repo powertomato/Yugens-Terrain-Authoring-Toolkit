@@ -317,7 +317,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	var verts: PackedVector3Array = current_cell_data["verts"]
 	var uvs: PackedVector2Array = current_cell_data["uvs"]
 	var custom_1_values: PackedColorArray = current_cell_data["custom_1_values"]
-	var is_floor: Array = current_cell_data["is_floor"]
+	var is_floor = current_cell_data["is_floor"] # Array (older populator data) or PackedByteArray
 	
 	for i in range(0, len(verts), 3):
 		if i+2 >= len(verts):

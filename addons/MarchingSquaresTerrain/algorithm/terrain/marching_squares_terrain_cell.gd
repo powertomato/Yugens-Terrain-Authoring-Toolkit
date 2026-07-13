@@ -107,6 +107,7 @@ var merge_threshold : float
 # NOTE: Untyped to avoid @tool cyclic load issues (chunk <-> cell <-> helper).
 var chunk
 var color_helper
+var cached_cell_size : Vector2 # cached copy of the terrain's cell_size (hot per-vertex path)
 
 
 # chunk_: MarchingSquaresTerrainChunk, color_helper_: MarchingSquaresTerrainVertexColorHelper
@@ -123,18 +124,22 @@ func _init(chunk_, color_helper_, y_top_left: float, y_top_right: float, y_botto
 	offset_c = offset_bottom_left
 	offset_d = offset_bottom_right
 	
-	var cell_scale_factor = clamp(((chunk_.terrain_system.cell_size.x + chunk_.terrain_system.cell_size.y) / 4.0), 0.3, 1.0)
+	cached_cell_size = chunk_.terrain_system.cell_size
+	var cell_scale_factor = clamp(((cached_cell_size.x + cached_cell_size.y) / 4.0), 0.3, 1.0)
 	var dimensions_scale_factor = clamp((((chunk_.terrain_system.dimensions.x / 33) + (chunk_.terrain_system.dimensions.z / 33)) / 2.0), 0.5, 2.0)
 	merge_threshold = merge_threshold_ * dimensions_scale_factor * cell_scale_factor
 	rotation = 0 as CellRotation
 
 
 func _reset_geometry_cache() -> void:
-	pts = []
-	uvs = []
-	uv2s = []
-	color_0s = []
-	color_1s = []
+	pts = PackedVector3Array()
+	uvs = PackedVector2Array()
+	uv2s = PackedVector2Array()
+	color_0s = PackedColorArray()
+	color_1s = PackedColorArray()
+	custom_1_values = PackedColorArray()
+	mat_blends = PackedColorArray()
+	floors = PackedByteArray()
 
 
 func rotate(r: int) -> void:
@@ -287,7 +292,7 @@ func start_wall() -> void:
 
 
 func add_point_uv2(x: float, y: float, z: float, u2: float, v2: float) -> void:
-	var uv: Vector2 = Vector2(x, z) / chunk.cell_size
+	var uv: Vector2 = Vector2(x, z) / cached_cell_size
 	add_point(x, y, z, uv.x, uv.y, u2, v2)
 
 
@@ -301,7 +306,7 @@ func add_point(x: float, y: float, z: float, u: float, v: float, u2: float = INF
 	# (x, z) are in the unrotated cell frame here, matching the unrotated corner offsets.
 	var xz_offset := offset_a.lerp(offset_b, x).lerp(offset_c.lerp(offset_d, x), z)
 	
-	var vert := Vector3((cell_coords.x+x) * chunk.cell_size.x + xz_offset.x, y, (cell_coords.y+z) * chunk.cell_size.y + xz_offset.y)
+	var vert := Vector3((cell_coords.x+x) * cached_cell_size.x + xz_offset.x, y, (cell_coords.y+z) * cached_cell_size.y + xz_offset.y)
 	var uv : Vector2
 	var uv2 : Vector2
 	var using_legacy_uv2 := is_finite(u2) and is_finite(v2)
@@ -316,7 +321,7 @@ func add_point(x: float, y: float, z: float, u: float, v: float, u2: float = INF
 		# Floor vertices keep their regular UVs.
 		uv = Vector2(u, v) if floor_mode else Vector2(2, 2)
 		if floor_mode:
-			uv2 = Vector2(vert.x, vert.z) / chunk.cell_size
+			uv2 = Vector2(vert.x, vert.z) / cached_cell_size
 		else:
 			# This avoids is_inside_tree() errors when inactive scene tabs are loaded
 			var chunk_pos : Vector3 = chunk.global_position_cached

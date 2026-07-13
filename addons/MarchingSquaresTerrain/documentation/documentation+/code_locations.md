@@ -34,4 +34,4 @@ Feel free to change these animations to what looks best for your project! The an
 ### Ridge & Ledge Texture Calculations
 
 * **mst_terrain** gdshaderinc → end of the fragment function.
-* **MarchingSquaresTerrainVertexColorHelper** script → at the start of the `blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false) -> Dictionary[String, Color]:` function
+* **MarchingSquaresTerrainVertexColorHelper** script → at the start of the `blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false, local_vert: Variant = null) -> void:` function (results are written to the `out_*` fields)

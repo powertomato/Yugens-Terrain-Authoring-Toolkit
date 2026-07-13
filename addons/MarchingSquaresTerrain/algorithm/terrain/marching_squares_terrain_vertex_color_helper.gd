@@ -29,99 +29,94 @@ var cell_weight_b : float = 0.0
 # Walls must derive their dominant mats from wall_color_map, not the ground color_map.
 var _mat_pair_is_floor: bool = true
 
+# Per-cell data cached once in calculate_corner_colors so the per-vertex path
+# never has to re-read the full color maps.
+var _floor_tex : PackedInt32Array # Texture index per corner A,B,C,D (floor maps)
+var _wall_tex : PackedInt32Array # Texture index per corner A,B,C,D (wall maps)
+var _floor_mats : PackedInt32Array # Dominant floor materials [mat_a, mat_b, mat_c]
+var _wall_mats : PackedInt32Array # Dominant wall materials [mat_a, mat_b, mat_c]
+var _grass_mask : Color # grass_mask_map value of this cell (CUSTOM1 base value)
+var _rl_index : int = 0 # Cell-dominant wall texture index (ridge/ledge tint)
+
+# Per-vertex outputs of blend_colors (fields instead of a per-vertex Dictionary)
+var out_color_0 : Color
+var out_color_1 : Color
+var out_custom_1 : Color
+var out_mat_blend : Color
+
 # NOTE: Untyped to avoid @tool cyclic load issues (chunk <-> helper <-> cell).
 var chunk
 var cell
 
 
-func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false, local_vert: Variant = null) -> Dictionary:
-	var colors : Dictionary = {}
-	var blend_threshold : float = cell.merge_threshold * BLEND_EDGE_SENSITIVITY # COMMENT: We can tweak the BLEND_EDGE_SENSITIVITY to allow more "agressive" Cliff vs Slope detection
-	var blend_ab : bool = abs(cell.ay-cell.by) < blend_threshold
-	var blend_ac : bool = abs(cell.ay-cell.cy) < blend_threshold
-	var blend_bd : bool = abs(cell.by-cell.dy) < blend_threshold
-	var blend_cd : bool = abs(cell.cy-cell.dy) < blend_threshold
-	var cell_has_walls_for_blend : bool = not (blend_ab and blend_ac and blend_bd and blend_cd)
-	
-	# Detect ridge BEFORE selecting color maps (ridge needs wall colors, not ground colors)
-	var is_ridge = cell.floor_mode and (uv.y > 0.0)
-	var is_ledge = cell.floor_mode and (uv.x > 0.0)
-	
-	# Get color source maps based on floor/wall/ridge state
-	var sources = _get_color_sources(cell.floor_mode)
-	var source_map_0 : PackedColorArray = sources[0]
-	var source_map_1 : PackedColorArray = sources[1]
-	var rl_source_map_0 : PackedColorArray = sources[2]
-	var rl_source_map_1 : PackedColorArray = sources[3]
-	var use_wall_colors = (source_map_0 == chunk.wall_color_map_0)
-	
+## Computes the vertex colors/blend data for one vertex and stores the results
+## in out_color_0, out_color_1, out_custom_1 and out_mat_blend.
+## calculate_corner_colors() must have been called for the cell beforehand.
+func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false, local_vert: Variant = null) -> void:
+	var is_floor : bool = cell.floor_mode
+
+	# Detect ridge/ledge (floor vertices only)
+	var is_ridge := is_floor and (uv.y > 0.0)
+	var is_ledge := is_floor and (uv.x > 0.0)
+
 	# Ensure dominant material selection matches the map we are currently sampling.
 	# Without this, wall vertices can incorrectly use floor material pairs (regression).
-	var want_floor_pair : bool = bool(cell.floor_mode)
-	if want_floor_pair !=  _mat_pair_is_floor:
-		calculate_cell_material_pair(source_map_0, source_map_1)
-		_mat_pair_is_floor = want_floor_pair
-	
+	# Both triples were computed once per cell in calculate_corner_colors().
+	var mats := _floor_mats if is_floor else _wall_mats
+	cell_mat_a = mats[0]
+	cell_mat_b = mats[1]
+	cell_mat_c = mats[2]
+	_mat_pair_is_floor = is_floor
+
 	# Terrain texturing is driven by CUSTOM2 (and weight_b in CUSTOM0.r).
 	# COLOR/CUSTOM0 are no longer used to encode the material index directly.
-	colors["color_0"] = Color(0, 0, 0, 0)
-	colors["color_1"] = Color(0, 0, 0, 0) # CUSTOM0.r is set after blend data is calculated.
-	
-	# is_ridge & is_ledge are already calculated above
-	var _idx = cell.cell_coords.y * chunk.dimensions.x + cell.cell_coords.x
-	var c_1_val : Color = _safe_color(chunk.grass_mask_map, _idx) # Grass mask
+	out_color_0 = Color(0, 0, 0, 0)
+
+	# CUSTOM1: grass mask + ridge/ledge flags + the cell-dominant wall texture index.
+	# A stable per-cell wall index keeps the ledge overlay from flipping inside one painted cell.
+	var c_1_val : Color = _grass_mask
 	c_1_val.g = 1.0 if is_ridge else 0.0
 	c_1_val.b = 1.0 if is_ledge else 0.0
-	
-	# Calculate and store a stable wall color index for the ridge/ledge.
-	# Per-vertex corner picking can cause patchy ledge tint flips inside one painted cell.
-	# Prefer the cell-dominant wall material so the ledge overlay stays visually consistent.
-	var x = cell.cell_coords.x
-	var z = cell.cell_coords.y
-	var base = z * chunk.dimensions.x + x
-	
-	var wall_a = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base), _safe_color(chunk.wall_color_map_1, base))
-	var wall_b = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base + 1), _safe_color(chunk.wall_color_map_1, base + 1))
-	var wall_c = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base + chunk.dimensions.x), _safe_color(chunk.wall_color_map_1, base + chunk.dimensions.x))
-	var wall_d = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base + chunk.dimensions.x + 1), _safe_color(chunk.wall_color_map_1, base + chunk.dimensions.x + 1))
-	
-	var wall_counts : Dictionary = {}
-	wall_counts[wall_a] = int(wall_counts.get(wall_a, 0)) + 1
-	wall_counts[wall_b] = int(wall_counts.get(wall_b, 0)) + 1
-	wall_counts[wall_c] = int(wall_counts.get(wall_c, 0)) + 1
-	wall_counts[wall_d] = int(wall_counts.get(wall_d, 0)) + 1
-	
-	var rl_idx = wall_a
-	var best_count := -1
-	for key in wall_counts.keys():
-		var count := int(wall_counts[key])
-		if count > best_count:
-			best_count = count
-			rl_idx = int(key)
-	c_1_val.a = rl_idx
-	colors["custom_1_value"] = c_1_val
-	
-	colors["mat_blend"] = calculate_material_blend_data(vertex.x, vertex.z, source_map_0, source_map_1)
-	colors["color_1"].r = cell_weight_b
-	return colors
+	c_1_val.a = _rl_index
+	out_custom_1 = c_1_val
+
+	out_mat_blend = calculate_material_blend_data(vertex.x, vertex.z, _floor_tex if is_floor else _wall_tex)
+	out_color_1 = Color(cell_weight_b, 0, 0, 0) # CUSTOM0.r = weight_b
 
 
 func calculate_corner_colors():
 	# Calculate cell height range for boundary detection (height-based color sampling)
 	cell_min_height = min(cell.ay, cell.by, cell.cy, cell.dy)
 	cell_max_height = max(cell.ay, cell.by, cell.cy, cell.dy)
-	
+
 	var x = cell.cell_coords.x
 	var z = cell.cell_coords.y
-	
+
 	# Determine if this is a boundary cell (significant height variation)
 	cell_is_boundary = (cell_max_height - cell_min_height) > cell.merge_threshold
-	
-	# Default to FLOOR material selection at cell start.
-	# Wall vertices will switch this on-demand in blend_colors().
-	calculate_cell_material_pair(chunk.color_map_0, chunk.color_map_1)
+
+	# Cache the per-corner texture indices (A, B, C, D) of both map pairs once per cell
+	var dim_x : int = chunk.dimensions.x
+	var idx : int = z * dim_x + x
+	_floor_tex = _corner_texture_indices(chunk.color_map_0, chunk.color_map_1, idx, dim_x)
+	_wall_tex = _corner_texture_indices(chunk.wall_color_map_0, chunk.wall_color_map_1, idx, dim_x)
+
+	# Dominant materials of both maps. Default to FLOOR material selection at cell start,
+	# wall vertices switch this in blend_colors().
+	_floor_mats = _calculate_material_triple(_floor_tex)
+	_wall_mats = _calculate_material_triple(_wall_tex)
+	cell_mat_a = _floor_mats[0]
+	cell_mat_b = _floor_mats[1]
+	cell_mat_c = _floor_mats[2]
 	_mat_pair_is_floor = true
-	
+
+	# Grass mask of this cell (CUSTOM1 base value)
+	_grass_mask = _safe_color(chunk.grass_mask_map, idx)
+
+	# Cell-dominant wall texture index for the ridge/ledge tint: the most common
+	# corner texture, ties keep the A, B, C, D corner order
+	_rl_index = _wall_mats[0]
+
 	if cell_is_boundary:
 		# Identify corners at each height level for height-based color sampling
 		# FLOOR colors - from color_map (used for regular floor vertices)
@@ -151,7 +146,7 @@ func calculate_corner_colors():
 			chunk.wall_color_map_1[(z + 1) * chunk.dimensions.x + x + 1]
 		]
 		var corner_heights = [cell.ay, cell.by, cell.cy, cell.dy]
-		
+
 		# Find corners at min and max height
 		var min_idx := 0
 		var max_idx := 0
@@ -160,7 +155,7 @@ func calculate_corner_colors():
 				min_idx = i
 			if corner_heights[i] > corner_heights[max_idx]:
 				max_idx = i
-		
+
 		# Floor boundary colors (from ground color_map)
 		cell_floor_lower_color_0 = floor_corner_color_0s[min_idx]
 		cell_floor_upper_color_0 = floor_corner_color_0s[max_idx]
@@ -312,44 +307,55 @@ static func texture_index_to_colors(idx: int) -> Array:
 	return [Color(float(idx) / 255.0, 0, 0, 0), Color(0, 0, 0, 0)]
 
 
-# Calculate 2 dominant textures for current cell
-func calculate_cell_material_pair(source_map_0: PackedColorArray, source_map_1: PackedColorArray) -> void:
-		var cell_coords = cell.cell_coords
-		var idx_base : int = int(cell_coords.y * chunk.dimensions.x + cell_coords.x)
-		# Helper: safely read a color from a PackedColorArray, moved to top-level to avoid nested function parse errors
-		
-		var tex_a : int = get_texture_index_from_colors(
-			_safe_color(source_map_0, idx_base),
-			_safe_color(source_map_1, idx_base))
-		var tex_b : int = get_texture_index_from_colors(
-			_safe_color(source_map_0, idx_base + 1),
-			_safe_color(source_map_1, idx_base + 1))
-		var tex_c : int = get_texture_index_from_colors(
-			_safe_color(source_map_0, idx_base + chunk.dimensions.x),
-			_safe_color(source_map_1, idx_base + chunk.dimensions.x))
-		var tex_d : int = get_texture_index_from_colors(
-			_safe_color(source_map_0, idx_base + chunk.dimensions.x + 1),
-			_safe_color(source_map_1, idx_base + chunk.dimensions.x + 1))
-		
-		var tex_counts : Dictionary = {}
-		tex_counts[tex_a] = tex_counts.get(tex_a, 0.0) + 1.0
-		tex_counts[tex_b] = tex_counts.get(tex_b, 0.0) + 1.0
-		tex_counts[tex_c] = tex_counts.get(tex_c, 0.0) + 1.0
-		tex_counts[tex_d] = tex_counts.get(tex_d, 0.0) + 1.0
-		
-		var sorted_textures : Array = tex_counts.keys()
-		# Sort descending by count
-		sorted_textures.sort_custom(func(a, b): return tex_counts[b] - tex_counts[a])
-		
-		if sorted_textures.size() == 0:
-			cell_mat_a = 0
-			cell_mat_b = 0
-			cell_mat_c = 0
-			return
-		
-		cell_mat_a = sorted_textures[0]
-		cell_mat_b = sorted_textures[1] if sorted_textures.size() > 1 else sorted_textures[0]
-		cell_mat_c = sorted_textures[2] if sorted_textures.size() > 2 else cell_mat_b
+# Texture index of each corner (A, B, C, D) of the cell at idx for the given color map pair.
+func _corner_texture_indices(map_0: PackedColorArray, map_1: PackedColorArray, idx: int, dim_x: int) -> PackedInt32Array:
+	var tex := PackedInt32Array()
+	tex.resize(4)
+	tex[0] = get_texture_index_from_colors(_safe_color(map_0, idx), _safe_color(map_1, idx))
+	tex[1] = get_texture_index_from_colors(_safe_color(map_0, idx + 1), _safe_color(map_1, idx + 1))
+	tex[2] = get_texture_index_from_colors(_safe_color(map_0, idx + dim_x), _safe_color(map_1, idx + dim_x))
+	tex[3] = get_texture_index_from_colors(_safe_color(map_0, idx + dim_x + 1), _safe_color(map_1, idx + dim_x + 1))
+	return tex
+
+
+# Calculate the 3 dominant textures for the given corner texture indices (A, B, C, D).
+# Returns [mat_a, mat_b, mat_c], most common first; ties keep the first-seen corner order.
+func _calculate_material_triple(corner_tex: PackedInt32Array) -> PackedInt32Array:
+	# Count unique texture indices in first-seen order (max 4 corners)
+	var uniq := PackedInt32Array()
+	var counts := PackedInt32Array()
+	for tex in corner_tex:
+		var found := -1
+		for i in range(uniq.size()):
+			if uniq[i] == tex:
+				found = i
+				break
+		if found >= 0:
+			counts[found] += 1
+		else:
+			uniq.append(tex)
+			counts.append(1)
+
+	var a_i := _first_max_index(counts, -1, -1)
+	var b_i := _first_max_index(counts, a_i, -1)
+	var c_i := _first_max_index(counts, a_i, b_i)
+	var mat_a : int = uniq[a_i]
+	var mat_b : int = uniq[b_i] if b_i >= 0 else mat_a
+	var mat_c : int = uniq[c_i] if c_i >= 0 else mat_b
+	return PackedInt32Array([mat_a, mat_b, mat_c])
+
+
+## Index of the highest count, skipping two indices; earliest index wins ties.
+func _first_max_index(counts: PackedInt32Array, skip_a: int, skip_b: int) -> int:
+	var best := -1
+	var best_count := -1
+	for i in range(counts.size()):
+		if i == skip_a or i == skip_b:
+			continue
+		if counts[i] > best_count:
+			best_count = counts[i]
+			best = i
+	return best
 
 
 func _safe_color(src, idx):
@@ -363,47 +369,47 @@ func _safe_color(src, idx):
 #   CUSTOM2.rgb = mat_a, mat_b, mat_c (0..255) as floats
 #   CUSTOM2.a   = weight_a (0..1)
 #   CUSTOM0.r   = weight_b (0..1)
-func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: PackedColorArray, source_map_1: PackedColorArray) -> Color:
-	var cell_coords = cell.cell_coords
-	var base_idx = cell_coords.y * chunk.dimensions.x + cell_coords.x
-	var tex_a : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx), _safe_color(source_map_1, base_idx))
-	var tex_b : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx + 1), _safe_color(source_map_1, base_idx + 1))
-	var tex_c : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx + chunk.dimensions.x), _safe_color(source_map_1, base_idx + chunk.dimensions.x))
-	var tex_d : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx + chunk.dimensions.x + 1), _safe_color(source_map_1, base_idx + chunk.dimensions.x + 1))
-	
+# corner_tex holds the texture index of each corner (A, B, C, D) of the map being
+# sampled; the materials are cell_mat_a/b/c (selected per vertex in blend_colors).
+func calculate_material_blend_data(vert_x: float, vert_z: float, corner_tex: PackedInt32Array) -> Color:
+	var tex_a : int = corner_tex[0]
+	var tex_b : int = corner_tex[1]
+	var tex_c : int = corner_tex[2]
+	var tex_d : int = corner_tex[3]
+
 	# Position weights for bilinear interpolation
 	var w_a : float = (1.0 - vert_x) * (1.0 - vert_z)
 	var w_b : float = vert_x * (1.0 - vert_z)
 	var w_c : float = (1.0 - vert_x) * vert_z
 	var w_d : float = vert_x * vert_z
-	
+
 	# Accumulate weights for all 3 cell materials
 	var weight_mat_a : float = 0.0
 	var weight_mat_b : float = 0.0
 	var weight_mat_c : float = 0.0
-	
+
 	if tex_a == cell_mat_a: weight_mat_a += w_a
 	elif tex_a == cell_mat_b: weight_mat_b += w_a
 	elif tex_a == cell_mat_c: weight_mat_c += w_a
-	
+
 	if tex_b == cell_mat_a: weight_mat_a += w_b
 	elif tex_b == cell_mat_b: weight_mat_b += w_b
 	elif tex_b == cell_mat_c: weight_mat_c += w_b
-	
+
 	if tex_c == cell_mat_a: weight_mat_a += w_c
 	elif tex_c == cell_mat_b: weight_mat_b += w_c
 	elif tex_c == cell_mat_c: weight_mat_c += w_c
-	
+
 	if tex_d == cell_mat_a: weight_mat_a += w_d
 	elif tex_d == cell_mat_b: weight_mat_b += w_d
 	elif tex_d == cell_mat_c: weight_mat_c += w_d
-	
+
 	# Normalize weights
 	var total_weight : float = weight_mat_a + weight_mat_b + weight_mat_c
 	if total_weight > 0.001:
 		weight_mat_a /= total_weight
 		weight_mat_b /= total_weight
-	
+
 	cell_weight_b = weight_mat_b
 	return Color(float(cell_mat_a), float(cell_mat_b), float(cell_mat_c), weight_mat_a)
 

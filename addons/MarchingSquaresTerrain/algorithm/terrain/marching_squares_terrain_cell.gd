@@ -326,15 +326,15 @@ func add_point(x: float, y: float, z: float, u: float, v: float, u2: float = INF
 	pts.append(vert)
 	uvs.append(uv)
 	uv2s.append(uv2)
-	var colors : Dictionary
+	# Results are written to the out_* fields of the helper (no per-vertex Dictionary)
 	if using_legacy_uv2:
-		colors = color_helper.blend_colors(Vector3(x, y, z), uv2)
+		color_helper.blend_colors(Vector3(x, y, z), uv2)
 	else:
-		colors = color_helper.blend_colors(Vector3(x, y, z), uv, false, vert)
-	custom_1_values.append(colors["custom_1_value"])
-	color_0s.append(colors["color_0"])
-	color_1s.append(colors["color_1"])
-	mat_blends.append(colors["mat_blend"])
+		color_helper.blend_colors(Vector3(x, y, z), uv, false, vert)
+	custom_1_values.append(color_helper.out_custom_1)
+	color_0s.append(color_helper.out_color_0)
+	color_1s.append(color_helper.out_color_1)
+	mat_blends.append(color_helper.out_mat_blend)
 	floors.append(floor_mode)
 
 

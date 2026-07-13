@@ -1041,20 +1041,16 @@ func _has_grass_for_texture(texture_id: int, force_grass_on: bool) -> bool:
 		if slot !=  null and slot.get("has_grass") != null:
 			return bool(slot.has_grass)
 	
-	# Fallback to legacy exported flags.
-	if texture_id == 1:
-		return bool(terrain_system.tex1_has_grass) if terrain_system.get("tex1_has_grass") != null else true
-	if texture_id < 2 or texture_id > 6:
-		return false
-	
-	var has_grass_flags := [
-		terrain_system.tex2_has_grass,
-		terrain_system.tex3_has_grass,
-		terrain_system.tex4_has_grass,
-		terrain_system.tex5_has_grass,
-		terrain_system.tex6_has_grass
-	]
-	return bool(has_grass_flags[texture_id - 2])
+	# Fallback to legacy exported flags. Direct lookup - this runs once per grass
+	# blade, so avoid building arrays.
+	match texture_id:
+		1: return bool(terrain_system.tex1_has_grass) if terrain_system.get("tex1_has_grass") != null else true
+		2: return bool(terrain_system.tex2_has_grass)
+		3: return bool(terrain_system.tex3_has_grass)
+		4: return bool(terrain_system.tex4_has_grass)
+		5: return bool(terrain_system.tex5_has_grass)
+		6: return bool(terrain_system.tex6_has_grass)
+	return false
 
 
 ## Gets the texture scale for the given texture ID.
@@ -1067,16 +1063,14 @@ func _get_texture_scale(texture_id: int) -> float:
 		if slot != null and slot.get("scale") != null:
 			return maxf(float(slot.scale), 0.001)
 	
-	var scales := [
-		terrain_system.texture_scale_1,
-		terrain_system.texture_scale_2,
-		terrain_system.texture_scale_3,
-		terrain_system.texture_scale_4,
-		terrain_system.texture_scale_5,
-		terrain_system.texture_scale_6
-	]
-	var legacy_idx := clampi(texture_id - 1, 0, 5)
-	return scales[legacy_idx]
+	# Legacy fallback - direct lookup instead of building an array per call
+	match clampi(texture_id, 1, 6):
+		2: return terrain_system.texture_scale_2
+		3: return terrain_system.texture_scale_3
+		4: return terrain_system.texture_scale_4
+		5: return terrain_system.texture_scale_5
+		6: return terrain_system.texture_scale_6
+	return terrain_system.texture_scale_1
 
 
 func _encode_grass_slot_id(texture_id: int) -> float:
@@ -1098,7 +1092,7 @@ func _sample_terrain_texture_color(world_pos: Vector3, texture_id: int, tex_scal
 	
 	var px := int(uv_x * (terrain_image.get_width() - 1))
 	var py := int(uv_y * (terrain_image.get_height() - 1))
-	var color := terrain_image.get_pixelv(Vector2(px, py))
+	var color := terrain_image.get_pixel(px, py)
 	if _format_needs_conversion(terrain_image.get_format()):
 		return color.srgb_to_linear()
 	return color

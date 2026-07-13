@@ -56,6 +56,8 @@ const _HIDDEN_INSTANCE_SCALE : float = 0.0001
 ## Cached CPU copy of the terrain rl_noise_texture for noisy floor-blend grass picks.
 var _cached_rl_noise_tex : Texture2D = null
 var _cached_rl_noise_image : Image = null
+## Chunk transform cached on the main thread for worker-thread grass generation.
+var _chunk_global_transform : Transform3D = Transform3D.IDENTITY
 
 # In the editor, full grass regenerations requested by inspector setters are
 # debounced: dragging a slider or color picker fires the setter on every tick,
@@ -248,6 +250,14 @@ func _build_grass_basis(normal: Vector3) -> Basis:
 	right = _safe_normalized(right, Vector3.RIGHT)
 	var forward := _safe_normalized(up.cross(right), Vector3.FORWARD)
 	return Basis(right, forward, -up)
+
+
+## Caches what generate_grass_on_cell needs from the scene tree (main-thread only
+## accessors) and warms the lazily built caches, so cells can be cooked on worker threads.
+func _prepare_thread_caches() -> void:
+	if _chunk != null:
+		_chunk_global_transform = _chunk.global_transform if _chunk.is_inside_tree() else _chunk.transform
+	_get_rl_noise_image()
 
 
 func _sample_height_local(x: float, z: float) -> float:
@@ -499,16 +509,16 @@ func _ensure_cell_geometry_for_grass(force_recook: bool = false) -> bool:
 	return _cell_geometry_ready_for_grass()
 
 
-func regenerate_all_cells(force_recook: bool = false) -> void:
+func regenerate_all_cells(force_recook: bool = false, use_threads: bool = true) -> void:
 	# Safety checks
 	if not _chunk:
 		push_error("_chunk not set while regenerating cells")
 		return
-	
+
 	if not terrain_system:
 		push_error("terrain_system not set while regenerating cells")
 		return
-	
+
 	if not multimesh:
 		setup(_chunk)
 	
@@ -525,9 +535,23 @@ func regenerate_all_cells(force_recook: bool = false) -> void:
 		return
 	
 	_hide_all_grass_instances()
-	for z in range(_chunk.dimensions.z - 1):
-		for x in range(_chunk.dimensions.x - 1):
-			generate_grass_on_cell(Vector2i(x, z))
+	# Cells are independent: each reads the shared cell geometry and writes its own
+	# MultiMesh index range. Everything the workers need from the scene tree is cached
+	# on the main thread first. Fall back to serial when not on the main thread
+	# (waiting on a nested worker group could deadlock).
+	_prepare_thread_caches()
+	if use_threads and OS.get_thread_caller_id() == OS.get_main_thread_id():
+		var worker_count := clampi(terrain_system.terrain_generation_threads, 1, 8)
+		var thread_pool := MarchingSquaresThreadPool.new(worker_count)
+		for z in range(_chunk.dimensions.z - 1):
+			for x in range(_chunk.dimensions.x - 1):
+				thread_pool.enqueue(generate_grass_on_cell.bind(Vector2i(x, z)))
+		thread_pool.start()
+		thread_pool.wait()
+	else:
+		for z in range(_chunk.dimensions.z - 1):
+			for x in range(_chunk.dimensions.x - 1):
+				generate_grass_on_cell(Vector2i(x, z))
 	multimesh.visible_instance_count = multimesh.instance_count
 	sync_render_instance()
 
@@ -729,6 +753,12 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 		_hide_grass_cell(cell_coords)
 		return
 	
+	# Scene tree access is main-thread only: refresh the cached chunk transform here when
+	# possible, worker threads use the value cached by _prepare_thread_caches()
+	if OS.get_thread_caller_id() == OS.get_main_thread_id():
+		_prepare_thread_caches()
+	var chunk_transform := _chunk_global_transform
+	
 	var cell_geometry = _chunk.cell_geometry[cell_coords]
 
 	if not cell_geometry.has("verts") or not cell_geometry.has("uvs") or not cell_geometry.has("color_1s") or not cell_geometry.has("custom_1_values") or not cell_geometry.has("mat_blend") or not cell_geometry.has("is_floor"):
@@ -853,9 +883,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				
 				# Match terrain floor selection: dominant weights in Smooth mode,
 				# noisy source/target islands when Floor Blend Mode is Noisy.
-				var world_sample_pos := p
-				if _chunk != null:
-					world_sample_pos = _chunk.to_global(p)
+				var world_sample_pos := chunk_transform * p
 				var selected_mat := _resolve_floor_material_index(
 					world_sample_pos, mat_a, mat_b, mat_c, w_a, w_b, w_c
 				)

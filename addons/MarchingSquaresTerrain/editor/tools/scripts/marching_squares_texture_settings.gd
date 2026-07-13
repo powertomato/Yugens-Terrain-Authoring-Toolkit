@@ -1587,7 +1587,7 @@ func _on_slider_drag_ended(ended: bool) -> void:
 		return
 	for chunk: MarchingSquaresTerrainChunk in plugin.current_terrain_node.chunks.values():
 		if chunk != null and chunk.grass_planter:
-			chunk.grass_planter.regenerate_all_cells()
+			chunk.grass_planter.queue_regenerate_all_cells()
 
 
 func _on_texture_import_confirmed() -> void:

@@ -543,8 +543,9 @@ var _is_syncing_wind_state := false
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			if not chunk.grass_planter or not chunk.grass_planter.multimesh:
 				continue
-			chunk.grass_planter.multimesh.instance_count = (dimensions.x-1) * (dimensions.z-1) * grass_subdivisions * grass_subdivisions
-			chunk.grass_planter.regenerate_all_cells()
+			# instance_count is resized by ensure_multimesh_count right before the
+			# (debounced) regeneration, avoiding a garbled-grass window in between
+			chunk.grass_planter.queue_regenerate_all_cells()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_size : Vector2 = Vector2(1.0, 1.0):
 	set(value):
 		grass_size = value
@@ -1449,10 +1450,12 @@ func _apply_grass_regen() -> void:
 			chunk.grass_planter.regenerate_all_cells()
 
 
+## Full grass rebuild of every chunk. Debounced per chunk in the editor (inspector
+## setters call this on every slider tick), immediate at runtime.
 func regenerate_all_chunk_grass(force_recook: bool = false) -> void:
 	for chunk: MarchingSquaresTerrainChunk in chunks.values():
 		if chunk and chunk.grass_planter:
-			chunk.grass_planter.regenerate_all_cells(force_recook)
+			chunk.grass_planter.queue_regenerate_all_cells(force_recook)
 
 #endregion
 

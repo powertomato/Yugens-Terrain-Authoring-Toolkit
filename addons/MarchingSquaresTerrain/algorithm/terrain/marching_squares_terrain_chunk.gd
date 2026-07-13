@@ -377,9 +377,11 @@ func _notification(what: int) -> void:
 	
 	match what:
 		NOTIFICATION_EDITOR_PRE_SAVE:
-			# Make sure a debounced collision rebuild is not still pending, so the
-			# saved scene captures up-to-date collision shapes
+			# Make sure debounced collision/grass rebuilds are not still pending,
+			# so the saved scene captures up-to-date data
 			_flush_pending_collision_rebuild()
+			if grass_planter:
+				grass_planter.flush_pending_regeneration()
 			
 			_scene_save_in_progress = true
 			_grass_regen_queued = false

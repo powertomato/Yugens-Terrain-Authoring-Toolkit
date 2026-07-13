@@ -57,6 +57,13 @@ const _HIDDEN_INSTANCE_SCALE : float = 0.0001
 var _cached_rl_noise_tex : Texture2D = null
 var _cached_rl_noise_image : Image = null
 
+# In the editor, full grass regenerations requested by inspector setters are
+# debounced: dragging a slider or color picker fires the setter on every tick,
+# but the (chunk-wide) rebuild only needs to run once the value settles.
+const REGEN_DEBOUNCE_MS : int = 250
+var _regen_all_deadline_ms : int = -1
+var _regen_all_force_recook : bool = false
+
 
 func _enter_tree() -> void:
 	set_notify_transform(true)
@@ -75,6 +82,39 @@ func _notification(what: int) -> void:
 			_sync_instance_visible()
 		NOTIFICATION_PREDELETE:
 			_free_render_instance()
+
+
+## Requests a full grass regeneration for this chunk. Debounced in the editor
+## (one rebuild ~REGEN_DEBOUNCE_MS after the last request), immediate at runtime.
+## force_recook is remembered until the pending regeneration runs.
+func queue_regenerate_all_cells(force_recook: bool = false) -> void:
+	if not EngineWrapper.instance.is_editor():
+		regenerate_all_cells(force_recook)
+		return
+	_regen_all_force_recook = _regen_all_force_recook or force_recook
+	_regen_all_deadline_ms = Time.get_ticks_msec() + REGEN_DEBOUNCE_MS
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	if _regen_all_deadline_ms < 0:
+		set_process(false)
+		return
+	if Time.get_ticks_msec() >= _regen_all_deadline_ms:
+		flush_pending_regeneration()
+
+
+## Runs a pending debounced regeneration immediately (e.g. before save).
+func flush_pending_regeneration() -> void:
+	if _regen_all_deadline_ms < 0:
+		return
+	_regen_all_deadline_ms = -1
+	set_process(false)
+	var force_recook := _regen_all_force_recook
+	_regen_all_force_recook = false
+	if not _chunk or not terrain_system:
+		return
+	regenerate_all_cells(force_recook)
 
 
 func set_grass_visible(p_visible: bool) -> void:
@@ -470,6 +510,11 @@ func regenerate_all_cells(force_recook: bool = false) -> void:
 		return
 	
 	if not multimesh:
+		setup(_chunk)
+	
+	# Resize once up front (a cooked cache of the wrong size is dropped and reallocated
+	# here), so the per-cell ensure_multimesh_count calls below are no-ops
+	if ensure_multimesh_count() and multimesh == null:
 		setup(_chunk)
 	
 	if not _ensure_cell_geometry_for_grass(force_recook):

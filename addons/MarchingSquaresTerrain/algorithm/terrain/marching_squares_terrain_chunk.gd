@@ -588,7 +588,20 @@ func _reset_cell_geometry(cell_coords: Vector2i) -> void:
 	}
 
 
-func _create_cell_for_geometry(cell_coords: Vector2i):
+## Cell merge threshold scaled by the terrain constants (cell size and chunk dimensions).
+## It only depends on terrain settings, so callers creating many cells compute it once.
+func _get_scaled_merge_threshold() -> float:
+	var cell_scale_factor : float = clamp(((terrain_system.cell_size.x + terrain_system.cell_size.y) / 4.0), 0.3, 1.0)
+	@warning_ignore("integer_division")
+	var dimensions_scale_factor : float = clamp((((terrain_system.dimensions.x / 33) + (terrain_system.dimensions.z / 33)) / 2.0), 0.5, 2.0)
+	return merge_threshold * dimensions_scale_factor * cell_scale_factor
+
+
+## Creates the (prefab or standard) cell object for cell_coords. Pass the pre-scaled merge
+## threshold when creating many cells (see _get_scaled_merge_threshold).
+func _create_cell_for_geometry(cell_coords: Vector2i, scaled_merge_threshold: float = -1.0):
+	if scaled_merge_threshold < 0.0:
+		scaled_merge_threshold = _get_scaled_merge_threshold()
 	var x := cell_coords.x
 	var z := cell_coords.y
 	var h00 := 0.0
@@ -618,9 +631,9 @@ func _create_cell_for_geometry(cell_coords: Vector2i):
 	var o11 := _get_xz_offset_safe(z + 1, x + 1)
 	var cell
 	if terrain_system != null and terrain_system.prefab_set != null:
-		cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
+		cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, scaled_merge_threshold, o00, o01, o10, o11)
 	else:
-		cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold, o00, o01, o10, o11)
+		cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, scaled_merge_threshold, o00, o01, o10, o11)
 	color_helper.chunk = self
 	color_helper.cell = cell
 	return cell
@@ -950,6 +963,10 @@ func generate_terrain_cells(use_threads: bool):
 			worker_count = clampi(terrain_system.terrain_generation_threads, 1, 8)
 		thread_pool = MarchingSquaresThreadPool.new(worker_count)
 	
+	# The merge threshold scale factors only depend on terrain constants -
+	# compute them once here instead of in every cell constructor.
+	var scaled_merge_threshold := _get_scaled_merge_threshold()
+	
 	for z in range(dimensions.z - 1):
 		for x in range(dimensions.x - 1):
 			var cell_coords := Vector2i(x, z)
@@ -969,7 +986,7 @@ func generate_terrain_cells(use_threads: bool):
 			# so that workers never need to resize the dictionary concurrently.
 			cell_geometry[cell_coords] = {}
 			
-			var work_load := _generate_cell.bind(cell_coords)
+			var work_load := _generate_cell.bind(cell_coords, scaled_merge_threshold)
 			if use_threads:
 				thread_pool.enqueue(work_load)
 			else:
@@ -1016,8 +1033,8 @@ func _cached_cell_geometry_is_valid(cell_coords: Vector2i) -> bool:
 # Generates the geometry of a single cell into its cell_geometry entry. Safe to run on a
 # worker thread: it only reads the shared source maps and writes into the entry of this
 # cell (see add_polygons).
-func _generate_cell(cell_coords: Vector2i) -> void:
-	var cell = _create_cell_for_geometry(cell_coords)
+func _generate_cell(cell_coords: Vector2i, scaled_merge_threshold: float) -> void:
+	var cell = _create_cell_for_geometry(cell_coords, scaled_merge_threshold)
 	if cell == null:
 		return
 	cell.generate_geometry(cell_coords)

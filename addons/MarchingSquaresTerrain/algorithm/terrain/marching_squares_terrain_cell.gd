@@ -34,21 +34,21 @@ var ady : float
 var cdy : float
 var abcdy : float
 
-var ay1 : float
-var by1 : float
-var cy1 : float
-var dy1 : float
-
 var _ay : float
 var _by : float
 var _cy : float
 var _dy : float
+
+# Corner heights in rotation-cycle order (_ay, _by, _dy, _cy): rotating the
+# cell by r quarter-turns shifts the read index by r.
+var _corner_cycle : PackedFloat64Array
 
 # XZ offsets for the four corners (top-left, top-right, bottom-left, bottom-right)
 var offset_a : Vector2  # Top-left offset
 var offset_b : Vector2  # Top-right offset
 var offset_c : Vector2  # Bottom-left offset
 var offset_d : Vector2  # Bottom-right offset
+var _has_xz_offset : bool # True if any corner offset is non-zero (skips per-vertex interpolation)
 
 var ab : bool
 var bd : bool
@@ -57,34 +57,16 @@ var ac : bool
 
 var rotation : CellRotation:
 	set(x):
-		match x:
-			CellRotation.DEG90: ay = _by
-			CellRotation.DEG180: ay = _dy
-			CellRotation.DEG270: ay = _cy
-			_: ay = _ay
+		var r := x as int
+		ay = _corner_cycle[r]
+		by = _corner_cycle[(r + 1) & 3]
+		dy = _corner_cycle[(r + 2) & 3]
+		cy = _corner_cycle[(r + 3) & 3]
 		
-		match x:
-			CellRotation.DEG90: by = _dy
-			CellRotation.DEG180: by = _cy
-			CellRotation.DEG270: by = _ay
-			_: by = _by
-		
-		match  x:
-			CellRotation.DEG90: dy = _cy
-			CellRotation.DEG180: dy = _ay
-			CellRotation.DEG270: dy = _by
-			_: dy = _dy
-		
-		match  x:
-			CellRotation.DEG90: cy = _ay
-			CellRotation.DEG180: cy = _by
-			CellRotation.DEG270: cy = _dy
-			_: cy = _cy
-		
-		ab = abs(ay-by) < merge_threshold  # top edge
-		bd = abs(by-dy) < merge_threshold # right edge
-		cd = abs(cy-dy) < merge_threshold # bottom edge
-		ac = abs(ay-cy) < merge_threshold # left edge
+		ab = absf(ay-by) < merge_threshold  # top edge
+		bd = absf(by-dy) < merge_threshold # right edge
+		cd = absf(cy-dy) < merge_threshold # bottom edge
+		ac = absf(ay-cy) < merge_threshold # left edge
 		
 		# Prefab generation still relies on these cached midpoint values.
 		aby = (ay + by) / 2.0
@@ -94,10 +76,6 @@ var rotation : CellRotation:
 		bcy = (by + cy) / 2.0
 		ady = (ay + dy) / 2.0
 		abcdy = (ay + by + cy + dy) / 4.0
-		ay1 = ay - 1.0
-		by1 = by - 1.0
-		cy1 = cy - 1.0
-		dy1 = dy - 1.0
 		
 		rotation = x
 
@@ -123,11 +101,16 @@ func _init(chunk_, color_helper_, y_top_left: float, y_top_right: float, y_botto
 	offset_b = offset_top_right
 	offset_c = offset_bottom_left
 	offset_d = offset_bottom_right
-	
+	_has_xz_offset = (
+		offset_a != Vector2.ZERO or offset_b != Vector2.ZERO
+		or offset_c != Vector2.ZERO or offset_d != Vector2.ZERO)
+
+	_corner_cycle = PackedFloat64Array([_ay, _by, _dy, _cy])
+
 	cached_cell_size = chunk_.terrain_system.cell_size
-	var cell_scale_factor = clamp(((cached_cell_size.x + cached_cell_size.y) / 4.0), 0.3, 1.0)
-	var dimensions_scale_factor = clamp((((chunk_.terrain_system.dimensions.x / 33) + (chunk_.terrain_system.dimensions.z / 33)) / 2.0), 0.5, 2.0)
-	merge_threshold = merge_threshold_ * dimensions_scale_factor * cell_scale_factor
+	# merge_threshold_ arrives pre-scaled by the chunk (the scale factors only
+	# depend on terrain constants, so they are computed once per regeneration)
+	merge_threshold = merge_threshold_
 	rotation = 0 as CellRotation
 
 
@@ -179,100 +162,112 @@ func generate_geometry(cell_coords_: Vector2i) -> void:
 	
 	# Starting from the lowest corner, build the tile up
 	var case_found : bool
+	var t := merge_threshold
 	for rot in range(4):
 		# Use the rotation of the corner - the amount of counter-clockwise rotations for it to become the top-left corner, which is just its index in the point lists.
 		rotation = rot as CellRotation
-		
+
+		# Corner height relations, inlined for speed (this chain is evaluated
+		# up to 4 times per cell):
+		#   d_xy > t        <=>  is_higher(x, y)
+		#   d_xy < -t       <=>  is_lower(x, y)
+		#   absf(d_xy) < t  <=>  is_merged(x, y)
+		var d_ab := ay - by
+		var d_ac := ay - cy
+		var d_bd := by - dy
+		var d_cd := cy - dy
+		var d_bc := by - cy
+
 		# If none of the branches are hit, this will be set to false at the last else statement.
 		# COMMENT: Opted for this instead of putting a break in every branch, that would take up space
 		case_found = true
-		
+
 		# Case 1
 		# If A is higher than adjacent and opposite corner is connected to adjacent,
 		# Add an outer corner here with upper and lower floor covering whole tile.
-		if is_higher(ay, by) and is_higher(ay, cy) and bd and cd:
+		if d_ab > t and d_ac > t and bd and cd:
 			add_c1()
-		
+
 		# Case 2
 		# If A is higher than C and B is higher than D,
 		# Add an edge here covering whole tile.
 		# COMMENT: (May want to prevent this if B and C are not within merge distance)
-		elif is_higher(ay, cy) and is_higher(by, dy) and ab and cd:
+		elif d_ac > t and d_bd > t and ab and cd:
 			add_c2()
-		
+
 		# Case 3: AB edge with A outer corner above
-		elif is_higher(ay, by) and is_higher(ay, cy) and is_higher(by, dy) and cd:
+		elif d_ab > t and d_ac > t and d_bd > t and cd:
 			add_c3()
-		
+
 		# Case 4: AB edge with B outer corner above
-		elif is_higher(by, ay) and is_higher(ay, cy) and is_higher(by, dy) and cd:
+		elif d_ab < -t and d_ac > t and d_bd > t and cd:
 			add_c4()
-		
+
 		# Case 5: B and C are higher than A and D.
 		# Diagonal raised floor between B and C.
 		# B and C must be within merge distance.
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_lower(dy, by) and is_lower(dy, cy) and is_merged(by, cy):
+		elif d_ab < -t and d_ac < -t and d_bd > t and d_cd > t and absf(d_bc) < t:
 			add_c5()
-		
+
 		# Case 6: B and C are higher than A and D, and B is higher than C.
 		# Place a raised diagonal floor between, and an outer corner around B.
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_lower(dy, by) and is_lower(dy, cy) and is_higher(by, cy):
+		elif d_ab < -t and d_ac < -t and d_bd > t and d_cd > t and d_bc > t:
 			add_c6()
-		
+
 		# Case 7: inner corner, where A is lower than B and C, and D is connected to B and C.
-		elif is_lower(ay, by) and is_lower(ay, cy) and bd and cd:
+		elif d_ab < -t and d_ac < -t and bd and cd:
 			add_c7()
-		
+
 		# Case 8: A is lower than B and C, B and C are merged, and D is higher than B and C.
 		# Outer corner around A, and on top of that an inner corner around D
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_higher(dy, by) and is_higher(dy, cy) and is_merged(by, cy):
+		elif d_ab < -t and d_ac < -t and d_bd < -t and d_cd < -t and absf(d_bc) < t:
 			add_c8()
-		
+
 		# Case 9: Inner corner surrounding A, with an outer corner sitting atop C.
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_lower(dy, cy) and bd:
+		elif d_ab < -t and d_ac < -t and d_cd > t and bd:
 			add_c9()
-		
+
 		# Case 10: Inner corner surrounding A, with an outer corner sitting atop B.
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_lower(dy, by) and cd:
+		elif d_ab < -t and d_ac < -t and d_bd > t and cd:
 			add_c10()
-		
+
 		# Case 11: Inner corner surrounding A, with an edge sitting atop BD.
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_higher(dy, cy) and bd:
+		elif d_ab < -t and d_ac < -t and d_cd < -t and bd:
 			add_c11()
-		
+
 		# Case 12: Inner corner surrounding A, with an edge sitting atop CD.
-		elif is_lower(ay, by) and is_lower(ay, cy) and is_higher(dy, by) and cd:
+		elif d_ab < -t and d_ac < -t and d_bd < -t and cd:
 			add_c12()
-		
+
 		# Case 13: Clockwise upwards spiral with A as the highest lowest point and C as the highest.
 		# A is lower than B, B is lower than D, D is lower than C, and C is higher than A.
-		elif is_lower(ay, by) and is_lower(by, dy) and is_lower(dy, cy) and is_higher(cy, ay):
+		elif d_ab < -t and d_bd < -t and d_cd > t and d_ac < -t:
 			add_c13()
-		
+
 		# Case 14: Clockwise upwards spiral, A lowest and B highest
-		elif is_lower(ay, cy) and is_lower(cy, dy) and is_lower(dy, by) and is_higher(by, ay):
+		elif d_ac < -t and d_cd < -t and d_bd > t and d_ab < -t:
 			add_c14()
-		
+
 		# Case 15: A<B, B<C, C<D
-		elif is_lower(ay, by) and is_lower(by, cy) and is_lower(cy, dy):
+		elif d_ab < -t and d_bc < -t and d_cd < -t:
 			add_c15()
-		
+
 		# Case 16: A<C, C<B, B<D
-		elif is_lower(ay, cy) and is_lower(cy, by) and is_lower(by, dy):
+		elif d_ac < -t and d_bc > t and d_bd < -t:
 			add_c16()
-		
+
 		# Case 17: All edges are connected, except AC, and A is higher than C.
-		elif ab and bd and cd and is_higher(ay, cy):
+		elif ab and bd and cd and d_ac > t:
 			add_c17()
-		
+
 		# Case 18: All edges are connected, except BD, and B is higher than D.
 		# Make an edge here, but merge one side of the edge together
-		elif ab and ac and cd and is_higher(by, dy):
+		elif ab and ac and cd and d_bd > t:
 			add_c18()
-		
+
 		else:
 			case_found = false
-		
+
 		if case_found:
 			break
 	
@@ -304,7 +299,9 @@ func add_point(x: float, y: float, z: float, u: float, v: float, u2: float = INF
 	
 	# Corner XZ offsets, bilinearly interpolated across the cell.
 	# (x, z) are in the unrotated cell frame here, matching the unrotated corner offsets.
-	var xz_offset := offset_a.lerp(offset_b, x).lerp(offset_c.lerp(offset_d, x), z)
+	var xz_offset := Vector2.ZERO
+	if _has_xz_offset:
+		xz_offset = offset_a.lerp(offset_b, x).lerp(offset_c.lerp(offset_d, x), z)
 	
 	var vert := Vector3((cell_coords.x+x) * cached_cell_size.x + xz_offset.x, y, (cell_coords.y+z) * cached_cell_size.y + xz_offset.y)
 	var uv : Vector2

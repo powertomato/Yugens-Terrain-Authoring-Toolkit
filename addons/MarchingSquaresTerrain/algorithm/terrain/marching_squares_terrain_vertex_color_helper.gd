@@ -38,6 +38,14 @@ var _wall_mats : PackedInt32Array # Dominant wall materials [mat_a, mat_b, mat_c
 var _grass_mask : Color # grass_mask_map value of this cell (CUSTOM1 base value)
 var _rl_index : int = 0 # Cell-dominant wall texture index (ridge/ledge tint)
 
+# Fast path for cells whose four corners share the same texture on a map (the
+# common case): the material blend data is then a per-cell constant, computed
+# once in calculate_corner_colors.
+var _floor_uniform : bool = false
+var _wall_uniform : bool = false
+var _const_mat_blend_floor : Color
+var _const_mat_blend_wall : Color
+
 # Per-vertex outputs of blend_colors (fields instead of a per-vertex Dictionary)
 var out_color_0 : Color
 var out_color_1 : Color
@@ -80,7 +88,12 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false, lo
 	c_1_val.a = _rl_index
 	out_custom_1 = c_1_val
 
-	out_mat_blend = calculate_material_blend_data(vertex.x, vertex.z, _floor_tex if is_floor else _wall_tex)
+	if (_floor_uniform if is_floor else _wall_uniform):
+		# Fast path: identical corner textures - the blend data is a per-cell constant
+		out_mat_blend = _const_mat_blend_floor if is_floor else _const_mat_blend_wall
+		cell_weight_b = 0.0
+	else:
+		out_mat_blend = calculate_material_blend_data(vertex.x, vertex.z, _floor_tex if is_floor else _wall_tex)
 	out_color_1 = Color(cell_weight_b, 0, 0, 0) # CUSTOM0.r = weight_b
 
 
@@ -116,6 +129,18 @@ func calculate_corner_colors():
 	# Cell-dominant wall texture index for the ridge/ledge tint: the most common
 	# corner texture, ties keep the A, B, C, D corner order
 	_rl_index = _wall_mats[0]
+
+	# Fast path detection: identical corner textures mean the bilinear blend weights
+	# collapse to a per-cell constant (weight_a = 1, weight_b = 0) - build it once.
+	# This equals what calculate_material_blend_data returns for any vertex of such a cell.
+	_floor_uniform = _floor_tex[1] == _floor_tex[0] and _floor_tex[2] == _floor_tex[0] and _floor_tex[3] == _floor_tex[0]
+	_wall_uniform = _wall_tex[1] == _wall_tex[0] and _wall_tex[2] == _wall_tex[0] and _wall_tex[3] == _wall_tex[0]
+	if _floor_uniform:
+		var m := float(_floor_tex[0])
+		_const_mat_blend_floor = Color(m, m, m, 1.0)
+	if _wall_uniform:
+		var m := float(_wall_tex[0])
+		_const_mat_blend_wall = Color(m, m, m, 1.0)
 
 	if cell_is_boundary:
 		# Identify corners at each height level for height-based color sampling

@@ -14,6 +14,9 @@ extends Resource
 ## Height values as 2D array
 @export var height_map : Array
 
+## Per-point XZ offsets (Vector2), flattened row-major (index = z * width + x)
+@export var xz_offsets : PackedVector2Array
+
 ## Ground texture indices
 @export var ground_texture_idx : PackedByteArray
 

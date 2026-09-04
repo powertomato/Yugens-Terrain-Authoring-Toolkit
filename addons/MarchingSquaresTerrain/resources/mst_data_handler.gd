@@ -307,9 +307,10 @@ static func load_chunk_from_directory(terrain: MarchingSquaresTerrain, coords: V
 		if data:
 			var mesh_surface_count := data.mesh.get_surface_count() if data.mesh != null else 0
 			var persisted_mesh_complete := chunk.is_persisted_mesh_complete(data.mesh)
-			print("[MST Persistence] load chunk=%s metadata=present height=%d ground=%d wall=%d mesh=%s surfaces=%d tiled_flag=%s surface_complete=%s" % [
+			print("[MST Persistence] load chunk=%s metadata=present height=%d xz=%d ground=%d wall=%d mesh=%s surfaces=%d tiled_flag=%s surface_complete=%s" % [
 				str(coords),
 				data.height_map.size(),
+				data.xz_offsets.size(),
 				data.ground_texture_idx.size(),
 				data.wall_texture_idx.size(),
 				"present" if data.mesh != null else "missing",
@@ -339,6 +340,7 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 	
 	# Source data
 	data.height_map = chunk.height_map.duplicate(true)
+	data.xz_offsets = _flatten_xz_offsets(chunk.xz_offset_map)
 	
 	# Convert to new data model
 	var cell_count : int = chunk.color_map_0.size()
@@ -420,6 +422,7 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	chunk.grass_mode = data.grass_mode as MarchingSquaresTerrainChunk.GrassMode
 	chunk._suppress_grass_mode_side_effects = false
 	chunk.height_map = data.height_map.duplicate(true)
+	chunk.xz_offset_map = _unflatten_xz_offsets(data.xz_offsets, chunk.height_map)
 	chunk.navmesh_permission = data.navmesh_permission.duplicate()
 	
 	# Restore baked assets if present. 1.2.4 stored the whole chunk as one
@@ -642,6 +645,57 @@ static func _texture_idx_to_colors(idx: int) -> Array:
 	var c0 := Color(float(idx) / 255.0, 0, 0, 0)
 	var c1 := Color(0, 0, 0, 0)
 	return [c0, c1]
+
+#endregion
+
+#region xz offset conversion helpers
+
+static func _flatten_xz_offsets(xz_offset_map: Array) -> PackedVector2Array:
+	var result := PackedVector2Array()
+	if xz_offset_map.is_empty():
+		return result
+	var width : int = -1
+	var any_non_zero := false
+	for row in xz_offset_map:
+		if not (row is Array):
+			return PackedVector2Array()
+		if width < 0:
+			width = row.size()
+		elif row.size() != width:
+			return PackedVector2Array()
+		for offset in row:
+			if not (offset is Vector2):
+				return PackedVector2Array()
+			if offset != Vector2.ZERO:
+				any_non_zero = true
+			result.append(offset)
+	if not any_non_zero:
+		return PackedVector2Array()
+	return result
+
+
+## Expand stored row-major offsets back into the nested [z][x] layout used by the
+## chunk, taking the shape from height_map. Missing or mismatched data yields an
+## all-zero map of that shape, so chunks saved before XZ offsets existed load cleanly.
+static func _unflatten_xz_offsets(xz_offsets: PackedVector2Array, height_map: Array) -> Array:
+	var result : Array = []
+	var rows : int = height_map.size()
+	if rows == 0 or not (height_map[0] is Array):
+		return result
+	var width : int = height_map[0].size()
+	if width == 0:
+		return result
+	var use_stored : bool = xz_offsets.size() == rows * width
+	if not use_stored and not xz_offsets.is_empty():
+		push_warning("MSTDataHandler: Ignoring stored XZ offsets of unexpected size %d (expected %d); resetting to zero." % [xz_offsets.size(), rows * width])
+	result.resize(rows)
+	for z in rows:
+		var row : Array = []
+		row.resize(width)
+		for x in width:
+			row[x] = xz_offsets[z * width + x] if use_stored else Vector2.ZERO
+		result[z] = row
+	return result
 
 #endregion
 

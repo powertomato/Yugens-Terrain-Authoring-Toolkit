@@ -66,7 +66,6 @@ var terrain_settings_data : Dictionary = {
 const TERRAIN_SETTINGS_CHUNK_TAB := [
 	"dimensions",
 	"cell_size",
-	"prefab_set",
 	"extra_collision_layer",
 	"collision_thickness",
 ]
@@ -110,6 +109,10 @@ const TERRAIN_SETTINGS_WIND_TAB := [
 	"flower_wind_strength",
 	"flower_stem_bend",
 	"flower_tip_flutter",
+]
+
+const TERRAIN_SETTINGS_PREFABS_TAB := [
+	"prefab_set",
 ]
 
 const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
@@ -1259,6 +1262,9 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.add_child(_create_post_processing_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Post-Processing")
 	
+	tabs.add_child(_create_prefabs_tab())
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Prefabs")
+	
 	tabs.current_tab = clampi(_terrain_settings_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
 	tabs.tab_changed.connect(func(tab_idx: int): _terrain_settings_selected_tab = tab_idx)
 	
@@ -1426,6 +1432,14 @@ func _create_environment_tab() -> Control:
 	page.name = "Environment"
 	page.add_theme_constant_override("separation", 8)
 	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_ENVIRONMENT_TAB)), true)
+	return page
+
+
+func _create_prefabs_tab() -> Control:
+	var page := VBoxContainer.new()
+	page.name = "Prefabs"
+	page.add_theme_constant_override("separation", 8)
+	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_PREFABS_TAB)), true)
 	return page
 
 
@@ -1667,12 +1681,22 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			else:
 				editor_r_picker.set_base_type("Texture2D")
 			editor_r_picker.edited_resource = plugin.current_terrain_node.get(setting)
-			_hide_textures(editor_r_picker)
 			editor_r_picker.resource_changed.connect(func(resource): _on_terrain_setting_changed(setting, resource))
-			editor_r_picker.set_custom_minimum_size(Vector2(120, 25))
-			
+			var picker_width := 120
+			if setting == "prefab_set":
+				# A prefab set has no thumbnail to hide. Widen the picker so the assigned
+				# set's name is readable, and open the set in the Inspector on click.
+				picker_width = 260
+				editor_r_picker.resource_selected.connect(func(resource: Resource, _inspect: bool):
+					if resource != null:
+						EditorInterface.inspect_object(resource)
+				)
+			else:
+				_hide_textures(editor_r_picker)
+			editor_r_picker.set_custom_minimum_size(Vector2(picker_width, 25))
+	
 			ts_cont = CenterContainer.new()
-			ts_cont.set_custom_minimum_size(Vector2(130, 35))
+			ts_cont.set_custom_minimum_size(Vector2(picker_width + 10, 35))
 			ts_cont.add_child(editor_r_picker, true)
 		"ColorPickerButton":
 			var c_pick_button := ColorPickerButton.new()

@@ -277,9 +277,8 @@ var vertex_color_1 : Color = Color(1.0, 0.0, 0.0, 0.0)
 #endregion
 
 #region draw-related vars
-# A dictionary with keys for each tile that is currently being drawn to with the brush
-# In brush mode, the value is the height that preview was drawn to, aka the height BEFORE it is set
-# In ground texture mode, the value is the color of the point BEFORE the draw
+# The current draw selection: { chunk_coords: { cell_coords: sample } }
+# The value is the brush falloff sample (0..1) of that cell, used as the blend weight in draw_pattern()
 var current_draw_pattern : Dictionary
 
 var terrain_hovered : bool
@@ -288,12 +287,15 @@ var current_hovered_chunk : Vector2i
 var curve3d_bridge_points : PackedVector3Array
 var last_bridge_point : Vector3
 
-# True if the mouse is currently held down to draw
+# True while LMB is held down to draw (brush tool: add cells to the selection)
 var is_drawing : bool
 var chunk_batch_dragging := false
 var chunk_batch_drag_removing := false
 var chunk_batch_drag_start := Vector2i.ZERO
 var chunk_batch_drag_end := Vector2i.ZERO
+
+# True while Ctrl+LMB is held down to erase the cells under the brush from the selection (brush tool)
+var is_erasing : bool
 
 # When the brush draws, if the gizmo sees the draw height is not set, it will set the draw height
 var draw_height_set : bool
@@ -307,7 +309,7 @@ var _wall_paint_stroke_dirty_chunks : Dictionary = {}
 var _wall_paint_last_stamp_position : Vector3 = Vector3.ZERO
 var _wall_paint_has_last_stamp_position : bool = false
 
-# Is set to true when the user clicks on a tile that is part of the current draw pattern, will enter heightdrag setting mode
+# True while the height of the current draw pattern is being dragged (brush tool: Shift+LMB+drag on a selection)
 var is_setting : bool
 
 # Variable for keeping the brush tool static when restarting the plugin
@@ -613,6 +615,7 @@ func _edit(object: Object) -> void:
 			current_draw_pattern.clear()
 			heightmap_pattern_samples.clear()
 			is_drawing = false
+			is_erasing = false
 			draw_height_set = false
 			gizmo_plugin.clear()
 			current_terrain_node = null
@@ -708,17 +711,11 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 					draw_position = terrain.to_local(plane_pos)
 					draw_area_hovered = true
 		
-		# ALT or Right Click to clear the current draw pattern. Don't clear while setting
-		var _right_clicked : bool = (
-			event is InputEventMouseButton and
-			event.button_index == MOUSE_BUTTON_RIGHT and
-			event.pressed
-		)
-		
-		if not is_setting:
-			if _right_clicked or Input.is_key_pressed(KEY_ALT):
-				current_draw_pattern.clear()
-				heightmap_pattern_samples.clear()
+		# Holding ALT clears the whole draw pattern (the brush tool erases single cells with Ctrl+LMB).
+		# Do not clear while setting. RMB is not used since the editor camera owns it.
+		if not is_setting and Input.is_key_pressed(KEY_ALT):
+			current_draw_pattern.clear()
+			heightmap_pattern_samples.clear()
 		
 		# Check for terrain collision
 		if draw_area_hovered:
@@ -775,7 +772,24 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				if mode in [TerrainToolMode.LEVEL, TerrainToolMode.CHUNK_MANAGEMENT] and Input.is_key_pressed(KEY_CTRL):
 					height = brush_position.y
 					ui.tool_attributes.show_tool_attributes(ui.active_tool)
-				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
+				elif mode == TerrainToolMode.BRUSH:
+					# Brush tool: LMB (+drag) only selects cells, Ctrl+LMB (+drag) erases the cells under
+					# the brush from the selection (the gizmo does the adding/erasing while redrawing).
+					# Shift+LMB+drag raises/lowers the current selection (with Alt held: only the hovered
+					# cell). The selection stays until it is deselected, so it can be adjusted repeatedly.
+					var has_selection : bool = not current_draw_pattern.is_empty()
+					if Input.is_key_pressed(KEY_CTRL):
+						is_erasing = true
+						brush_position = draw_position
+					elif shift_held and (has_selection or Input.is_key_pressed(KEY_ALT)):
+						is_setting = true
+						brush_position = draw_position
+						if not flatten:
+							draw_height = draw_position.y
+					else:
+						is_drawing = true
+						brush_position = draw_position
+				elif shift_held and mode not in [TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 					is_drawing = true
 					brush_position = draw_position
 				elif mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
@@ -785,6 +799,8 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			elif event.is_released():
 				if is_making_bridge:
 					is_making_bridge = false
+				if is_erasing:
+					is_erasing = false
 				if is_drawing:
 					is_drawing = false
 					if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode:
@@ -807,7 +823,8 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 						if mode == TerrainToolMode.BRIDGE and not curve3d_mode:
 							rebuild_bridge_line_pattern(brush_position)
 						draw_pattern(terrain)
-						if Input.is_key_pressed(KEY_SHIFT):
+						if mode == TerrainToolMode.BRUSH or shift_held:
+							# Keep the selection at its new height so it can be adjusted again
 							draw_height = brush_position.y
 						else:
 							current_draw_pattern.clear()

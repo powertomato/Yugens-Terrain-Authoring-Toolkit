@@ -12,14 +12,22 @@ For community showcases, feature requests and bug reporting, please refer to the
 ### Brush Tool
 The most basic of brushes that can simply elevate or lower terrain.
 
-> _The following can be used on all brush related tools..._
-
 Shortcuts:
-* Shift+LMB+Drag: Add cells to the current draw selection.
+* LMB+Drag: Select cells. Every click adds to the selection, which stays until you deselect it.
+
+* Shift+LMB+Drag: Raise or lower the selected cells. The selection is kept afterwards so it can be adjusted again.
+
+* Shift+Alt+LMB+Drag: Raise or lower only the hovered cell.
+
+* Ctrl+LMB+Drag: Deselect the cells under the brush.
+
+* Alt: Deselect all cells.
+
+> _The following can be used on all brush related tools..._
 
 * Shift+MWU/MWD: Increase or decrease the brush size.
 
-* Alt/RMB/Esc: Reset the current draw selection.
+* Alt/Esc: Reset the current draw selection.
 
 ### Level Tool
 A handy brush that levels the terrain to a certain height.

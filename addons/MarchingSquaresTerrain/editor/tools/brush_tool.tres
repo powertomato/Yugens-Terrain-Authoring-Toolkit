@@ -19,13 +19,17 @@ icon = ExtResource("1_6atyx")
 label = "Brush"
 tooltip = "The most basic of brushes that can simply elevate or lower terrain.
 
-[color=DIM_GRAY][i]The following can be used on all brush related tools...[/i][/color]
-
 [b]Shortcuts[/b]:
-[ul]Shift+LMB+Drag: Add cells to the current draw selection.[/ul]
+[ul]LMB+Drag: Select cells (adds to the current selection).[/ul]
 
-[ul]Shift+MWU/MWD: Increase or decrease the brush size.[/ul]
+[ul]Shift+LMB+Drag: Raise or lower the selected cells.[/ul]
 
-[ul]Alt/RMB/Esc: Reset the current draw selection.[/ul]"
+[ul]Shift+Alt+LMB+Drag: Raise or lower only the hovered cell.[/ul]
+
+[ul]Ctrl+LMB+Drag: Deselect the cells under the brush.[/ul]
+
+[ul]Alt: Deselect all cells.[/ul]
+
+[ul]Shift+MWU/MWD: Increase or decrease the brush size (all brush based tools).[/ul]"
 attributes = SubResource("Resource_f0ade")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

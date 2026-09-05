@@ -418,6 +418,24 @@ float sample_palette_weight(int slot, int color_idx) {
 	return max(texture(palette_weights_tex, vec2(u, v)).r, 0.0);
 }
 
+float _palette_weight_or_zero(int slot, int color_idx, int color_count) {
+	return (color_idx < color_count) ? sample_palette_weight(slot, color_idx) : 0.0;
+}
+
+// Palette weights are kept in two vec4s (slots 0-3 / 4-7) instead of a float[8]:
+// writing into a local array through a runtime index does not compile on NVIDIA's
+// OpenGL driver (Compatibility renderer, "lvalue in array access too complex").
+// Indices outside 0..7 read as 0.0.
+float _palette_weight_at(vec4 ws_lo, vec4 ws_hi, int i) {
+	vec4 v = (i < 4) ? ws_lo : ws_hi;
+	int j = (i < 4) ? i : i - 4;
+	if (j == 0) return v.x;
+	if (j == 1) return v.y;
+	if (j == 2) return v.z;
+	if (j == 3) return v.w;
+	return 0.0;
+}
+
 vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 	tex_idx = clamp(tex_idx, 0, 255);
 	int color_count = _palette_count(tex_idx);
@@ -444,32 +462,32 @@ vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 	}
 
 	// Weighted distribution (values are normalized per slot).
-	float ws[8];
-	float total = 0.0;
-	for (int i = 0; i < 8; i++) {
-		if (i < color_count) {
-			float w = sample_palette_weight(tex_idx, i);
-			ws[i] = w;
-			total += w;
-		} else {
-			ws[i] = 0.0;
-		}
-	}
+	vec4 ws_lo = vec4(
+		_palette_weight_or_zero(tex_idx, 0, color_count),
+		_palette_weight_or_zero(tex_idx, 1, color_count),
+		_palette_weight_or_zero(tex_idx, 2, color_count),
+		_palette_weight_or_zero(tex_idx, 3, color_count));
+	vec4 ws_hi = vec4(
+		_palette_weight_or_zero(tex_idx, 4, color_count),
+		_palette_weight_or_zero(tex_idx, 5, color_count),
+		_palette_weight_or_zero(tex_idx, 6, color_count),
+		_palette_weight_or_zero(tex_idx, 7, color_count));
+	float total = dot(ws_lo, vec4(1.0)) + dot(ws_hi, vec4(1.0));
 	if (total <= 0.0001) {
+		// Equal weights (1.0) for every used color, 0.0 for the rest.
 		total = float(color_count);
-		for (int i = 0; i < 8; i++) {
-			ws[i] = (i < color_count) ? 1.0 : 0.0;
-		}
+		ws_lo = clamp(float(color_count) - vec4(0.0, 1.0, 2.0, 3.0), 0.0, 1.0);
+		ws_hi = clamp(float(color_count) - vec4(4.0, 5.0, 6.0, 7.0), 0.0, 1.0);
 	}
 
 	float x = clamp(n, 0.0, 1.0) * total;
 	int i0 = 0;
 	float start = 0.0;
-	float w0 = ws[0];
+	float w0 = ws_lo.x;
 	float cum = 0.0;
 	for (int i = 0; i < 8; i++) {
 		if (i >= color_count) break;
-		float wi = ws[i];
+		float wi = _palette_weight_at(ws_lo, ws_hi, i);
 		if (x < cum + wi || i == color_count - 1) {
 			i0 = i;
 			start = cum;
@@ -495,8 +513,10 @@ vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 		float dither = hash(dither_coord);
 		for (int i = 0; i < 7; i++) {
 			if (i >= color_count - 1) break;
-			boundary += ws[i];
-			if (ws[i] <= 0.0001 || ws[i + 1] <= 0.0001) continue;
+			float wi = _palette_weight_at(ws_lo, ws_hi, i);
+			float wn = _palette_weight_at(ws_lo, ws_hi, i + 1);
+			boundary += wi;
+			if (wi <= 0.0001 || wn <= 0.0001) continue;
 			float blend_t = smoothstep(boundary - transition, boundary + transition, x);
 			float sel = step(dither, blend_t);
 			result = mix(result, sample_palette_entry(tex_idx, i + 1), sel);
@@ -513,8 +533,10 @@ vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 		float checker = mod(checker_coord.x + checker_coord.y, 2.0);
 		for (int i = 0; i < 7; i++) {
 			if (i >= color_count - 1) break;
-			boundary += ws[i];
-			if (ws[i] <= 0.0001 || ws[i + 1] <= 0.0001) continue;
+			float wi = _palette_weight_at(ws_lo, ws_hi, i);
+			float wn = _palette_weight_at(ws_lo, ws_hi, i + 1);
+			boundary += wi;
+			if (wi <= 0.0001 || wn <= 0.0001) continue;
 			float blend_t = smoothstep(boundary - transition, boundary + transition, x);
 			vec4 next_color = sample_palette_entry(tex_idx, i + 1);
 			if (blend_t > 0.5 + seam) {
@@ -532,11 +554,13 @@ vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 		float band_start = 0.0;
 		for (int i = 0; i < 8; i++) {
 			if (i >= color_count) break;
-			float wi = ws[i];
+			float wi = _palette_weight_at(ws_lo, ws_hi, i);
 			float band_end = band_start + wi;
 			if (wi > 0.0001) {
-				float left_width = (i == 0) ? 0.0 : max(min(ws[i - 1], wi) * 0.75, total * 0.004);
-				float right_width = (i == color_count - 1) ? 0.0 : max(min(wi, ws[i + 1]) * 0.75, total * 0.004);
+				float w_prev = _palette_weight_at(ws_lo, ws_hi, i - 1);
+				float w_next = _palette_weight_at(ws_lo, ws_hi, i + 1);
+				float left_width = (i == 0) ? 0.0 : max(min(w_prev, wi) * 0.75, total * 0.004);
+				float right_width = (i == color_count - 1) ? 0.0 : max(min(wi, w_next) * 0.75, total * 0.004);
 				float left_mask = (i == 0) ? 1.0 : smoothstep(band_start - left_width, band_start + left_width, x);
 				float right_mask = (i == color_count - 1) ? 1.0 : 1.0 - smoothstep(band_end - right_width, band_end + right_width, x);
 				float mask = max(left_mask * right_mask, 0.0);

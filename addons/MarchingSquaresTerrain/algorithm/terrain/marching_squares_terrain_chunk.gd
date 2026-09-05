@@ -340,6 +340,11 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
 			elif mat is ShaderMaterial:
 				mat.set_shader_parameter("texture_albedo", ImageTexture.create_from_image(img))
+				# Keep the prefab-set color map (RGB tint + alpha cut-out) on the baked material.
+				var src_mat : ShaderMaterial = terrain_system.terrain_material
+				if src_mat != null:
+					mat.set_shader_parameter("tex_prefab_colormap", src_mat.get_shader_parameter("tex_prefab_colormap"))
+					mat.set_shader_parameter("has_prefab_colormap", src_mat.get_shader_parameter("has_prefab_colormap"))
 			# Runtime texture baking replaces the normal terrain material. Preserve
 			# the post-processing chain, otherwise effects visible in the editor are
 			# silently lost as soon as the bake completes.

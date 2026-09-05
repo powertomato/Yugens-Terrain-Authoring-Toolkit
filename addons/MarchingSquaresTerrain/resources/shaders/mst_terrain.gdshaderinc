@@ -1129,6 +1129,7 @@ void fragment() {
 	if (has_prefab_colormap) {
 		vec4 prefab_col = texture(tex_prefab_colormap, UV);
 		ALBEDO *= prefab_col.rgb;
+		ALPHA *= prefab_col.a;
 	}
 
 

@@ -151,9 +151,10 @@ var _data_directory : String = ""
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			if is_instance_valid(chunk):
 				chunk.mark_dirty()
-				# Prefab swaps touch the whole chunk, so queue the expensive rebuild
-				# onto the deferred path and thread the geometry work to reduce editor stalls.
-				chunk.queue_mesh_regen(true)
+				# Prefab swaps invalidate every cell of the chunk, so flag all cells and
+				# mesh tiles stale (a plain queue_mesh_regen would reuse the cached cell
+				# geometry) and queue the expensive rebuild onto the deferred, threaded path.
+				chunk.queue_full_mesh_regen(true)
 		if not is_batch_updating:
 			_request_grass_regen()
 

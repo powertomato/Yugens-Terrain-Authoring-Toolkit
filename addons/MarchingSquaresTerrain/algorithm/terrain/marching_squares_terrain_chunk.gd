@@ -2435,13 +2435,36 @@ func _apply_collision_layers() -> void:
 					_child.set_visible(false)
 
 
-func regenerate_all_cells(use_threads: bool):
+## Flags every cell and mesh tile of this chunk as stale so the next mesh
+## regeneration rebuilds all of them instead of reusing cached cell geometry.
+func mark_all_cells_for_update() -> void:
 	_mark_all_mesh_tiles_dirty()
-	for z in range(dimensions.z-1):
-		for x in range(dimensions.x-1):
+	var expected_z := maxi(dimensions.z - 1, 0)
+	var expected_x := maxi(dimensions.x - 1, 0)
+	if needs_update == null or needs_update.size() != expected_z \
+			or (expected_z > 0 and needs_update[0].size() != expected_x):
+		needs_update = []
+		for z in range(expected_z):
+			needs_update.append([])
+			for x in range(expected_x):
+				needs_update[z].append(true)
+		return
+	for z in range(expected_z):
+		for x in range(expected_x):
 			needs_update[z][x] = true
-	
+
+
+func regenerate_all_cells(use_threads: bool):
+	mark_all_cells_for_update()
 	regenerate_mesh(use_threads)
+
+
+## Deferred counterpart of regenerate_all_cells. Terrain-wide settings such as
+## the prefab set invalidate every cell, so a plain queue_mesh_regen() (which
+## only rebuilds cells flagged in needs_update) would reuse the stale cache.
+func queue_full_mesh_regen(use_threads: bool = false) -> void:
+	mark_all_cells_for_update()
+	queue_mesh_regen(use_threads)
 
 
 @export_tool_button("Export GLB") var bake =  func():

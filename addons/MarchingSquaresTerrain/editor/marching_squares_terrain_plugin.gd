@@ -1275,14 +1275,17 @@ func _apply_navmesh_pattern(terrain: MarchingSquaresTerrain, pattern: Dictionary
 		_ensure_navmesh_permission(chunk)
 		
 		var width := maxi(chunk.dimensions.x - 1, 1)
+		var depth := maxi(chunk.dimensions.z - 1, 1)
 		if not _navmesh_stroke_undo.has(chunk_coords):
 			_navmesh_stroke_undo[chunk_coords] = {}
 		if not _navmesh_stroke_do.has(chunk_coords):
 			_navmesh_stroke_do[chunk_coords] = {}
 		
 		for cell_coords: Vector2i in pattern[chunk_coords].keys():
+			if cell_coords.x < 0 or cell_coords.y < 0 or cell_coords.x >= width or cell_coords.y >= depth:
+				continue
 			var index : int = cell_coords.y * width + cell_coords.x
-			if index < 0 or index >= chunk.navmesh_permission.size():
+			if index >= chunk.navmesh_permission.size():
 				continue
 			if not _navmesh_stroke_undo[chunk_coords].has(index):
 				_navmesh_stroke_undo[chunk_coords][index] = chunk.navmesh_permission[index]

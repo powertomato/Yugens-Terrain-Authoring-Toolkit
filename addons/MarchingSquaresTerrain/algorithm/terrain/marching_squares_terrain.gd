@@ -400,7 +400,7 @@ var flat_normals : bool = false:
 #region global noise settings
 # Convenience: texture used by the shader's global noise multiplier.
 # Defaults to the same noise used for ridge/ledge so porting feels consistent.
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var global_noise_texture : Texture2D = EngineWrapper.load_resource("uid://dbnc04k3n0sro") as Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var global_noise_texture : Texture2D = preload("uid://dbnc04k3n0sro"):
 	set(value):
 		global_noise_texture = value
 		if terrain_material != null:
@@ -434,7 +434,7 @@ var flat_normals : bool = false:
 #endregion
 
 #region wind settings
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wind_noise_texture : Texture2D = EngineWrapper.load_resource("uid://dk1t5hy2tiil7") as Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wind_noise_texture : Texture2D = preload("uid://dk1t5hy2tiil7"): # bare preload, same reason as global_noise_texture
 	set(value):
 		wind_noise_texture = value
 		_sync_wind_state()

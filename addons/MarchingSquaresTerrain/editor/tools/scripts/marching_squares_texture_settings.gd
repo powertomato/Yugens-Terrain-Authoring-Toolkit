@@ -832,6 +832,7 @@ func add_texture_settings() -> void:
 	gn_picker.resource_changed.connect(func(resource):
 		resource = _coerce_texture2d(resource)
 		terrain.set("global_noise_texture", resource)
+		EditorInterface.mark_scene_as_unsaved()
 	)
 	gn_picker.resource_selected.connect(func(resource: Resource, inspect: bool):
 		if inspect and resource != null:
@@ -859,7 +860,10 @@ func add_texture_settings() -> void:
 		gn_strength_slider.set_value(float(gn_strength_val))
 	else:
 		gn_strength_slider.set_value(1.0)
-	gn_strength_slider.value_changed.connect(func(v): terrain.set("global_noise_strength", float(v)))
+	gn_strength_slider.value_changed.connect(func(v):
+		terrain.set("global_noise_strength", float(v))
+		EditorInterface.mark_scene_as_unsaved()
+	)
 	gn_strength_slider.set_custom_minimum_size(Vector2(95, 25))
 	gn_strength_hbox.add_child(gn_strength_slider)
 	gn_strength_hbox.visible = false
@@ -880,7 +884,10 @@ func add_texture_settings() -> void:
 		gn_scale_slider.set_value(float(gn_scale_val))
 	else:
 		gn_scale_slider.set_value(0.037)
-	gn_scale_slider.value_changed.connect(func(v): terrain.set("global_noise_scale", float(v)))
+	gn_scale_slider.value_changed.connect(func(v):
+		terrain.set("global_noise_scale", float(v))
+		EditorInterface.mark_scene_as_unsaved()
+	)
 	gn_scale_slider.set_custom_minimum_size(Vector2(95, 25))
 	gn_scale_hbox.add_child(gn_scale_slider)
 	gn_scale_hbox.visible = false

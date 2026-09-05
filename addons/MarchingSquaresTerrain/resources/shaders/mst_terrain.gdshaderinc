@@ -12,10 +12,10 @@ group_uniforms Visuals.Palette;
 // - palette_weights_tex: 8 x 256, R in [0..1].    x=color idx (0..7), y=slot (0..255)
 // - palette_meta_tex:    1 x 256, RGBA8 encoded:  r=count(0..8), g=blend_mode(0..3),
 //                          b/a reserved, each stored as 0..255
-uniform sampler2D palette_colors_tex : filter_nearest;
+uniform sampler2D palette_colors_tex : source_color, filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
-uniform sampler2D slot_albedo_tex : filter_nearest;
+uniform sampler2D slot_albedo_tex : source_color, filter_nearest;
 // Per-slot surface settings: roughness=.r, wetness_enabled=.g, wetness_mode=.b, grass_wetness=.a.
 uniform sampler2D palette_surface_settings_tex : filter_nearest;
 // Per-slot shared global-noise settings: strength=.r, scale=.g, enabled=.b.

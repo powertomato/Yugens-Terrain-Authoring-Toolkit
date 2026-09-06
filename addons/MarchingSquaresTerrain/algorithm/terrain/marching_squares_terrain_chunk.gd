@@ -2347,13 +2347,31 @@ func _apply_collision_layers() -> void:
 					_child.set_visible(false)
 
 
-func regenerate_all_cells(use_threads: bool):
+func mark_all_cells_for_update() -> void:
 	_mark_all_mesh_tiles_dirty()
-	for z in range(dimensions.z-1):
-		for x in range(dimensions.x-1):
+	var expected_z := maxi(dimensions.z - 1, 0)
+	var expected_x := maxi(dimensions.x - 1, 0)
+	if needs_update == null or needs_update.size() != expected_z \
+			or (expected_z > 0 and needs_update[0].size() != expected_x):
+		needs_update = []
+		for z in range(expected_z):
+			needs_update.append([])
+			for x in range(expected_x):
+				needs_update[z].append(true)
+		return
+	for z in range(expected_z):
+		for x in range(expected_x):
 			needs_update[z][x] = true
-	
+
+
+func regenerate_all_cells(use_threads: bool):
+	mark_all_cells_for_update()
 	regenerate_mesh(use_threads)
+
+
+func queue_full_mesh_regen(use_threads: bool = false) -> void:
+	mark_all_cells_for_update()
+	queue_mesh_regen(use_threads)
 
 
 @export_tool_button("Export GLB") var bake = func():

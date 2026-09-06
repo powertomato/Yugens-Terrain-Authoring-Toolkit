@@ -2,7 +2,11 @@ shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_back;
 
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_linear_mipmap;
+#if CURRENT_RENDERER == RENDERER_FORWARD_PLUS
+// The normal-roughness is Forward+ only.
+// A workaround is to use the depth buffer (see mst_sample_normal).
 uniform sampler2D normal_roughness_texture : hint_normal_roughness_texture, repeat_disable, filter_linear_mipmap;
+#endif
 uniform sampler2D rl_noise_texture : hint_default_white, repeat_enable, filter_linear;
 
 group_uniforms Ink;
@@ -56,17 +60,48 @@ float mst_noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-vec3 mst_decode_normal(vec3 enc) {
-	return normalize(enc * 2.0 - 1.0);
-}
-
 float mst_sample_depth(vec2 uv) {
 	return texture(depth_texture, uv).r;
 }
 
-vec3 mst_sample_normal(vec2 uv) {
+#if CURRENT_RENDERER == RENDERER_FORWARD_PLUS
+vec3 mst_decode_normal(vec3 enc) {
+	return normalize(enc * 2.0 - 1.0);
+}
+
+vec3 mst_sample_normal(vec2 uv, vec2 pixel, mat4 inv_projection) {
 	return mst_decode_normal(texture(normal_roughness_texture, uv).xyz);
 }
+#else
+vec3 mst_view_position(vec2 uv, float depth, mat4 inv_projection) {
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	// OpenGL keeps NDC depth in -1..1; the Vulkan-based renderers use 0..1.
+	vec3 ndc = vec3(uv * 2.0 - 1.0, depth * 2.0 - 1.0);
+#else
+	vec3 ndc = vec3(uv * 2.0 - 1.0, depth);
+#endif
+	vec4 view = inv_projection * vec4(ndc, 1.0);
+	return view.xyz / view.w;
+}
+
+vec3 mst_sample_normal(vec2 uv, vec2 pixel, mat4 inv_projection) {
+	vec2 dx = vec2(pixel.x, 0.0);
+	vec2 dy = vec2(0.0, pixel.y);
+	float d0 = mst_sample_depth(uv);
+	float dxp = mst_sample_depth(uv + dx);
+	float dxn = mst_sample_depth(uv - dx);
+	float dyp = mst_sample_depth(uv + dy);
+	float dyn = mst_sample_depth(uv - dy);
+	vec3 p0 = mst_view_position(uv, d0, inv_projection);
+	vec3 tangent_x = (abs(dxp - d0) < abs(dxn - d0))
+		? mst_view_position(uv + dx, dxp, inv_projection) - p0
+		: p0 - mst_view_position(uv - dx, dxn, inv_projection);
+	vec3 tangent_y = (abs(dyp - d0) < abs(dyn - d0))
+		? mst_view_position(uv + dy, dyp, inv_projection) - p0
+		: p0 - mst_view_position(uv - dy, dyn, inv_projection);
+	return normalize(cross(tangent_x, tangent_y));
+}
+#endif
 
 float mst_hatch_band(float coord, float width) {
 	float d = abs(fract(coord) - 0.5);
@@ -158,7 +193,7 @@ void fragment() {
 	vec2 pixel = 1.0 / VIEWPORT_SIZE;
 
 	float center_depth = mst_sample_depth(uv);
-	vec3 center_normal = mst_sample_normal(uv);
+	vec3 center_normal = mst_sample_normal(uv, pixel, INV_PROJECTION_MATRIX);
 
 	float wobble_field = (mst_noise(v_world_pos.xz * 0.23 + TIME * 0.03) - 0.5) * line_wobble;
 	vec2 wobble_offset = pixel * wobble_field * 1.35;
@@ -179,7 +214,7 @@ void fragment() {
 	for (int i = 0; i < 8; i++) {
 		vec2 sample_uv = uv + offsets[i] + wobble_offset;
 		float sample_depth = mst_sample_depth(sample_uv);
-		vec3 sample_normal = mst_sample_normal(sample_uv);
+		vec3 sample_normal = mst_sample_normal(sample_uv, pixel, INV_PROJECTION_MATRIX);
 		depth_edge = max(depth_edge, abs(sample_depth - center_depth));
 		normal_edge = max(normal_edge, length(sample_normal - center_normal));
 	}

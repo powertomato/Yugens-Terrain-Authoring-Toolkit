@@ -1027,7 +1027,6 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	for vp in get_tree().root.find_children("*", "SubViewport", true, false):
 		if vp.owner != null:
 			dialog.add_viewport_preview_source(vp)
-	dialog.add_viewport_preview_source(EditorInterface.get_editor_viewport_3d())
 	
 	dialog.prev_cam_button.pressed.connect(func():
 		dialog.cycle_preview(-1)
@@ -1065,7 +1064,7 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 						dialog.current_preview_index = clampi(dialog.current_preview_index, 0, dialog.preview_source_count() - 1)
 						dialog.apply_preview_source(dialog.current_preview_index)
 					else:
-						dialog.texture_preview.texture = null
+						dialog.clear_preview()
 			return
 		if material_preview_index < 0:
 			dialog.add_material_preview_source(slot_idx, terrain)

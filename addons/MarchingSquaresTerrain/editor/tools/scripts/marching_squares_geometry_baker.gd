@@ -166,9 +166,10 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	new_arrays[Mesh.ARRAY_INDEX] = bake_indices
 	new_arrays[Mesh.ARRAY_VERTEX] = new_verts
 	new_arrays[Mesh.ARRAY_TEX_UV] = new_uvs
+	new_arrays[Mesh.ARRAY_TEX_UV2] = bake_uvs
 	new_arrays[Mesh.ARRAY_NORMAL] = bake_normals
 	
-	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, new_arrays, [], {}, Mesh.ARRAY_FORMAT_NORMAL | Mesh.ARRAY_FORMAT_VERTEX | Mesh.ARRAY_FORMAT_TEX_UV | Mesh.ARRAY_FORMAT_COLOR)
+	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, new_arrays, [], {}, Mesh.ARRAY_FORMAT_NORMAL | Mesh.ARRAY_FORMAT_VERTEX | Mesh.ARRAY_FORMAT_TEX_UV | Mesh.ARRAY_FORMAT_TEX_UV2 | Mesh.ARRAY_FORMAT_COLOR)
 	
 	# At this point we have the inset triangles, they will contain the actual color data.
 	# To prevent texture bleeding when we bake the texture we add a quad on each of their sides to serve as a border.

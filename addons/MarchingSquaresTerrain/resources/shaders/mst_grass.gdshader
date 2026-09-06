@@ -3,12 +3,12 @@ render_mode diffuse_toon, depth_draw_opaque, depth_prepass_alpha;
 
 group_uniforms Visuals.Palette;
 // Palette data is provided via lookup textures (see mst_terrain.gdshaderinc for details).
-uniform sampler2D palette_colors_tex : filter_nearest;
+uniform sampler2D palette_colors_tex : source_color, filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
 uniform sampler2D palette_surface_settings_tex : filter_nearest;
 uniform sampler2D palette_floor_noise_tex : filter_nearest;
-uniform sampler2D slot_albedo_tex : filter_nearest;
+uniform sampler2D slot_albedo_tex : source_color, filter_nearest;
 uniform sampler2D tex_prefab_colormap : source_color;
 uniform bool has_prefab_colormap = false;
 group_uniforms;

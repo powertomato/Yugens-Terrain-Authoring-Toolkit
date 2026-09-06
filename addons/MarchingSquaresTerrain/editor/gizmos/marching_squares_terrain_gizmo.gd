@@ -276,7 +276,11 @@ func _redraw():
 							draw_transform = Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
 						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
-							var cell_material := navmesh_material if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE else brush_material
+							var cell_material := brush_material
+							if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE:
+								cell_material = navmesh_material
+							elif terrain_plugin.is_erasing:
+								cell_material = removechunk_material
 							# Once a heightmap stroke starts, the retained-pattern pass below
 							# draws every accumulated stamp, including the current one.
 							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and (already_set_once or terrain_plugin.is_drawing):
@@ -300,6 +304,16 @@ func _redraw():
 									terrain_plugin.current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
 							else:
 								terrain_plugin.current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
+						elif terrain_plugin.is_erasing and terrain_plugin.current_draw_pattern.has(cursor_chunk_coords):
+							var erase_chunk_dict : Dictionary = terrain_plugin.current_draw_pattern[cursor_chunk_coords]
+							if erase_chunk_dict.has(cursor_cell_coords):
+								var remaining : float = minf(float(erase_chunk_dict[cursor_cell_coords]), 1.0 - sample)
+								if remaining <= 0.0:
+									erase_chunk_dict.erase(cursor_cell_coords)
+								else:
+									erase_chunk_dict[cursor_cell_coords] = remaining
+							if erase_chunk_dict.is_empty():
+								terrain_plugin.current_draw_pattern.erase(cursor_chunk_coords)
 	
 	var height_diff : float
 	if terrain_plugin.is_setting and terrain_plugin.draw_height_set:

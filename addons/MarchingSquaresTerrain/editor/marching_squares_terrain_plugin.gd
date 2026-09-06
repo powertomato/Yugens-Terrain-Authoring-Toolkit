@@ -176,6 +176,7 @@ func deactivate_navmesh_paint_mode() -> void:
 	_commit_navmesh_stroke(current_terrain_node)
 	set_navmesh_paint_mode(NavMeshPaintMode.NONE)
 	is_drawing = false
+	is_erasing = false
 	is_setting = false
 	current_draw_pattern.clear()
 	if current_terrain_node != null and gizmo_plugin != null:
@@ -290,6 +291,8 @@ var last_bridge_point : Vector3
 
 # True if the mouse is currently held down to draw
 var is_drawing : bool
+# True if the mouse is held down with Ctrl to remove cells from the current draw pattern
+var is_erasing : bool
 var chunk_batch_dragging := false
 var chunk_batch_drag_removing := false
 var chunk_batch_drag_start := Vector2i.ZERO
@@ -613,6 +616,7 @@ func _edit(object: Object) -> void:
 			current_draw_pattern.clear()
 			heightmap_pattern_samples.clear()
 			is_drawing = false
+			is_erasing = false
 			draw_height_set = false
 			gizmo_plugin.clear()
 			current_terrain_node = null
@@ -778,6 +782,9 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 					is_drawing = true
 					brush_position = draw_position
+				elif Input.is_key_pressed(KEY_CTRL) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP] and not (mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode):
+					is_erasing = true
+					brush_position = draw_position
 				elif mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 					is_setting = true
 					if not flatten:
@@ -798,6 +805,8 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 							current_draw_pattern.clear()
 					if mode in [TerrainToolMode.SMOOTH]:
 						current_draw_pattern.clear()
+				if is_erasing:
+					is_erasing = false
 				if is_setting:
 					is_setting = false
 					if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode:

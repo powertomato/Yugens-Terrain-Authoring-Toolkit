@@ -65,6 +65,10 @@ float mst_sample_depth(vec2 uv) {
 }
 
 #if CURRENT_RENDERER == RENDERER_FORWARD_PLUS
+// Angle threshold for line ~30 deg
+const float MST_NORMAL_EDGE_MIN = 0.08;
+const float MST_NORMAL_EDGE_MAX = 0.42;
+
 vec3 mst_decode_normal(vec3 enc) {
 	return normalize(enc * 2.0 - 1.0);
 }
@@ -72,7 +76,20 @@ vec3 mst_decode_normal(vec3 enc) {
 vec3 mst_sample_normal(vec2 uv, vec2 pixel, mat4 inv_projection) {
 	return mst_decode_normal(texture(normal_roughness_texture, uv).xyz);
 }
+
+vec3 mst_center_normal(vec2 uv, vec2 pixel, mat4 inv_projection, vec3 world_normal, mat4 view_matrix) {
+	return mst_sample_normal(uv, pixel, inv_projection);
+}
+
+float mst_normal_edge_weight(float depth_step) {
+	return 1.0;
+}
 #else
+// In reconstructed normals are only valid per facet. Two neighboring facets always result in a hard edge
+// (even if they are coplanar). So we need to be more lenient with the edge detection threshold.
+const float MST_NORMAL_EDGE_MIN = 0.55;
+const float MST_NORMAL_EDGE_MAX = 1.05;
+
 vec3 mst_view_position(vec2 uv, float depth, mat4 inv_projection) {
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
 	// OpenGL keeps NDC depth in -1..1; the Vulkan-based renderers use 0..1.
@@ -99,7 +116,18 @@ vec3 mst_sample_normal(vec2 uv, vec2 pixel, mat4 inv_projection) {
 	vec3 tangent_y = (abs(dyp - d0) < abs(dyn - d0))
 		? mst_view_position(uv + dy, dyp, inv_projection) - p0
 		: p0 - mst_view_position(uv - dy, dyn, inv_projection);
-	return normalize(cross(tangent_x, tangent_y));
+	vec3 normal = normalize(cross(tangent_x, tangent_y));
+
+	vec3 to_camera = (abs(inv_projection[2][3]) < 1e-6) ? vec3(0.0, 0.0, 1.0) : normalize(-p0);
+	return (dot(normal, to_camera) < 0.0) ? -normal : normal;
+}
+
+vec3 mst_center_normal(vec2 uv, vec2 pixel, mat4 inv_projection, vec3 world_normal, mat4 view_matrix) {
+	return normalize((view_matrix * vec4(normalize(world_normal), 0.0)).xyz);
+}
+
+float mst_normal_edge_weight(float depth_step) {
+	return 1.0 - smoothstep(0.0025, 0.015, depth_step);
 }
 #endif
 
@@ -193,7 +221,7 @@ void fragment() {
 	vec2 pixel = 1.0 / VIEWPORT_SIZE;
 
 	float center_depth = mst_sample_depth(uv);
-	vec3 center_normal = mst_sample_normal(uv, pixel, INV_PROJECTION_MATRIX);
+	vec3 center_normal = mst_center_normal(uv, pixel, INV_PROJECTION_MATRIX, v_world_normal, VIEW_MATRIX);
 
 	float wobble_field = (mst_noise(v_world_pos.xz * 0.23 + TIME * 0.03) - 0.5) * line_wobble;
 	vec2 wobble_offset = pixel * wobble_field * 1.35;
@@ -215,12 +243,13 @@ void fragment() {
 		vec2 sample_uv = uv + offsets[i] + wobble_offset;
 		float sample_depth = mst_sample_depth(sample_uv);
 		vec3 sample_normal = mst_sample_normal(sample_uv, pixel, INV_PROJECTION_MATRIX);
-		depth_edge = max(depth_edge, abs(sample_depth - center_depth));
-		normal_edge = max(normal_edge, length(sample_normal - center_normal));
+		float depth_step = abs(sample_depth - center_depth) * depth_edge_strength * 18.0;
+		depth_edge = max(depth_edge, depth_step);
+		normal_edge = max(normal_edge, length(sample_normal - center_normal) * mst_normal_edge_weight(depth_step));
 	}
 
-	depth_edge = smoothstep(0.0025, 0.015, depth_edge * depth_edge_strength * 18.0);
-	normal_edge = smoothstep(0.08, 0.42, normal_edge * normal_edge_strength);
+	depth_edge = smoothstep(0.0025, 0.015, depth_edge);
+	normal_edge = smoothstep(MST_NORMAL_EDGE_MIN, MST_NORMAL_EDGE_MAX, normal_edge * normal_edge_strength);
 
 	vec3 world_view_dir = normalize(CAMERA_POSITION_WORLD - v_world_pos);
 	float silhouette_raw = pow(1.0 - abs(dot(normalize(v_world_normal), world_view_dir)), silhouette_power) * silhouette_strength;

@@ -114,7 +114,7 @@ func _redraw():
 			if Input.is_key_pressed(KEY_ALT) and chunks.has(cursor_chunk_coords):
 				terrain_plugin.current_draw_pattern.clear()
 				terrain_plugin.current_draw_pattern[cursor_chunk_coords] = {}
-				terrain_plugin.current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = chunks[cursor_chunk_coords].get_height(cursor_cell_coords)
+				terrain_plugin.current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = 1.0
 				terrain_plugin.draw_height = pos.y
 			terrain_plugin.base_position = pos
 	
@@ -238,15 +238,9 @@ func _redraw():
 						if sample < 0:
 							continue  # Outside brush
 						
-						var y : float
-						if not terrain_plugin.current_draw_pattern.is_empty() and terrain_plugin.flatten:
-							y = terrain_plugin.draw_height
-						else:
-							# height_map can be empty while chunks initialize (or after errors).
-							if chunk.height_map.size() > z and z >=  0 and chunk.height_map[z].size() > x and x >= 0:
-								y = chunk.height_map[z][x]
-							else:
-								y = 0.0
+						var y : float = 0.0
+						if chunk.height_map.size() > z and z >=  0 and chunk.height_map[z].size() > x and x >= 0:
+							y = chunk.height_map[z][x]
 						
 						var pixel : Color
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
@@ -315,8 +309,9 @@ func _redraw():
 							if erase_chunk_dict.is_empty():
 								terrain_plugin.current_draw_pattern.erase(cursor_chunk_coords)
 	
+	var is_height_dragging : bool = terrain_plugin.is_setting and terrain_plugin.draw_height_set
 	var height_diff : float
-	if terrain_plugin.is_setting and terrain_plugin.draw_height_set:
+	if is_height_dragging:
 		height_diff = terrain_plugin.brush_position.y - terrain_plugin.draw_height
 	
 	if not terrain_plugin.current_draw_pattern.is_empty():
@@ -335,37 +330,36 @@ func _redraw():
 			for draw_coords: Vector2i in draw_chunk_dict:
 				var draw_x : float = (float(draw_chunk_coords.x) * float(dims.x - 1) + float(draw_coords.x)) * cell_size.x
 				var draw_z : float = (float(draw_chunk_coords.y) * float(dims.z - 1) + float(draw_coords.y)) * cell_size.y
-				var draw_y := terrain_plugin.draw_height if terrain_plugin.flatten else 0.0
-				if not terrain_plugin.flatten:
-					var dz := draw_coords.y
-					var dx := draw_coords.x
-					if chunk.height_map.size() > dz and dz >= 0 and chunk.height_map[dz].size() > dx and dx >= 0:
-						draw_y = chunk.height_map[dz][dx]
-				
-				var heightmap_sample := 1.0
-				if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
-					heightmap_sample = terrain_plugin.get_heightmap_pattern_sample(draw_chunk_coords, draw_coords)
-					draw_y += terrain_plugin.brush_size / terrain_system.cell_size.x * heightmap_sample
+				var cell_height : float = 0.0
+				var dz := draw_coords.y
+				var dx := draw_coords.x
+				if chunk.height_map.size() > dz and dz >= 0 and chunk.height_map[dz].size() > dx and dx >= 0:
+					cell_height = chunk.height_map[dz][dx]
 				
 				var sample : float = draw_chunk_dict[draw_coords]
 				
-				# If setting, also show a square at the height to set to
-				if terrain_plugin.is_setting and terrain_plugin.draw_height_set:
-					var draw_position := Vector3(draw_x, draw_y + height_diff * sample, draw_z)
-					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
-						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and heightmap_sample <= 0.0:
-							pass
-						else:
-							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
-				else:
-					var draw_position := Vector3(draw_x, draw_y, draw_z)
-					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
-						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and heightmap_sample <= 0.0:
-							pass
-						else:
-							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
+				var draw_y := cell_height
+				var heightmap_sample := 1.0
+				if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
+					if terrain_plugin.flatten:
+						draw_y = terrain_plugin.draw_height
+					heightmap_sample = terrain_plugin.get_heightmap_pattern_sample(draw_chunk_coords, draw_coords)
+					draw_y += terrain_plugin.brush_size / terrain_system.cell_size.x * heightmap_sample
+					if is_height_dragging:
+						draw_y += height_diff * sample
+				elif is_height_dragging:
+					if terrain_plugin.flatten:
+						draw_y = lerpf(cell_height, terrain_plugin.brush_position.y, sample)
+					else:
+						draw_y = cell_height + height_diff * sample
+				
+				if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
+					if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and heightmap_sample <= 0.0:
+						pass
+					else:
+						var draw_position := Vector3(draw_x, draw_y, draw_z)
+						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
+						add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 	
 	# Show the current_populator's cell selection
 	if terrain_plugin.mode == terrain_plugin.TerrainToolMode.POPULATE and Input.is_key_pressed(KEY_CTRL):

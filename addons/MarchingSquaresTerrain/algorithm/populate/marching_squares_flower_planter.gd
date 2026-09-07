@@ -6,6 +6,8 @@ class_name MarchingSquaresFlowerPlanter
 
 # All populators need this variable at the top so the mst_populator_settings.gd script can reference it properly
 const CLASS_NAME := "MarchingSquaresFlowerPlanter"
+# Slope limit floor faces steeper than this get no flowers, same as grass planter (_MIN_GRASS_FACE_UP_DOT)
+const _MIN_FLOWER_FACE_UP_DOT : float = 0.5
 
 var terrain_system : MarchingSquaresTerrain
 var _connected_color_gradient: Gradient
@@ -320,6 +322,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	var uvs: PackedVector2Array = current_cell_data["uvs"]
 	var custom_1_values: PackedColorArray = current_cell_data["custom_1_values"]
 	var is_floor: Array = current_cell_data["is_floor"]
+	var uv_marks_ledges : bool = terrain_system == null or terrain_system.prefab_set == null
 	
 	for i in range(0, len(verts), 3):
 		if i+2 >= len(verts):
@@ -331,6 +334,9 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 		var a := verts[i] + chunk_offset
 		var b := verts[i+1] + chunk_offset
 		var c := verts[i+2] + chunk_offset
+		var face_normal := (b - a).cross(c - a)
+		if face_normal.length_squared() < 0.000001 or absf(face_normal.normalized().y) < _MIN_FLOWER_FACE_UP_DOT:
+			continue
 		
 		var v0 := Vector2(c.x - a.x, c.z - a.z)
 		var v1 := Vector2(b.x - a.x, b.z - a.z)
@@ -363,7 +369,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 				
 				# Don't place flowers on ledge or ridges
 				var uv = uvs[i]*u + uvs[i+1]*v + uvs[i+2]*(1-u-v)
-				var on_ledge_or_ridge : bool = uv.y > 0.0 or uv.x > 0.5
+				var on_ledge_or_ridge : bool = uv_marks_ledges and (uv.y > 0.0 or uv.x > 0.5)
 				
 				if not on_ledge_or_ridge:
 					_create_flower_instance(index, p, a, b, c, color_rng)

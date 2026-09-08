@@ -68,7 +68,7 @@ var wall_paint_stamp_normals : PackedVector3Array = PackedVector3Array()
 var wall_paint_stamp_radii : PackedFloat32Array = PackedFloat32Array()
 var wall_paint_stamp_texture_indices : PackedInt32Array = PackedInt32Array()
 
-var global_position_cached : Vector3 = Vector3.ZERO
+var terrain_position_cached : Vector3 = Vector3.ZERO
 
 var cell_generation_mutex : Mutex = Mutex.new()
 
@@ -517,7 +517,7 @@ func rebuild_cell_geometry_for_grass() -> void:
 		for z in range(expected_z):
 			for x in range(expected_x):
 				needs_update[z][x] = true
-	_cache_global_position_for_thread()
+	_cache_terrain_position_for_thread()
 	var collect_was := _collect_mesh_arrays
 	_collect_mesh_arrays = false
 	generate_terrain_cells(false)
@@ -531,7 +531,7 @@ func regenerate_cell_geometry(cell_coords: Vector2i) -> void:
 		return
 	if cell_geometry == null:
 		cell_geometry = {}
-	_cache_global_position_for_thread()
+	_cache_terrain_position_for_thread()
 	_reset_cell_geometry(cell_coords)
 	var cell = _create_cell_for_geometry(cell_coords)
 	if cell == null:
@@ -601,7 +601,7 @@ func regenerate_mesh(use_threads: bool =  false):
 	var was_hydrated_mesh := _baked_mesh_is_complete
 	_baked_mesh_is_complete = false
 	_apply_shadow_visibility_settings()
-	_cache_global_position_for_thread()
+	_cache_terrain_position_for_thread()
 	if _mesh_tiles.is_empty():
 		_mark_all_mesh_tiles_dirty()
 	_clear_mesh_build_arrays()
@@ -1315,7 +1315,7 @@ func _apply_chunk_surface_material() -> void:
 		var source_material := base_mat as ShaderMaterial
 		var source_revision : int = terrain_system._surface_material_revision
 		if _chunk_surface_material == null or _chunk_surface_material_source != source_material or _chunk_surface_material_revision != source_revision:
-			_chunk_surface_material = source_material.duplicate(true)
+			_chunk_surface_material = source_material.duplicate()
 			_chunk_surface_material_source = source_material
 			_chunk_surface_material_revision = source_revision
 		_sync_wall_paint_shader_params(_chunk_surface_material)
@@ -1400,7 +1400,7 @@ func begin_deferred_initial_build() -> void:
 	if _initial_build_pending or not is_inside_tree():
 		return
 	# Scene-tree transforms must be read on the main thread before the worker starts.
-	_cache_global_position_for_thread()
+	_cache_terrain_position_for_thread()
 	_mark_all_mesh_tiles_dirty()
 	_initial_build_pending = true
 	build_phase = BuildPhase.GENERATING_CELLS
@@ -1418,8 +1418,8 @@ func _start_deferred_initial_build_thread() -> void:
 	_initial_build_thread.start(_run_deferred_initial_cell_generation)
 
 
-func _cache_global_position_for_thread() -> void:
-	global_position_cached = global_position if is_inside_tree() else position
+func _cache_terrain_position_for_thread() -> void:
+	terrain_position_cached = position
 
 
 func wait_for_initial_build() -> void:

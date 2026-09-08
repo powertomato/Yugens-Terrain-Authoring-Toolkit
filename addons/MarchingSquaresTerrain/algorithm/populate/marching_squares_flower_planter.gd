@@ -288,10 +288,8 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	var points : PackedVector2Array = []
 	var count := flower_subdivisions * flower_subdivisions
 	var chunk_offset: Vector3
-	if chunk.is_inside_tree():
-		chunk_offset = chunk.global_position
-	elif terrain_system and terrain_system.is_inside_tree():
-		chunk_offset = terrain_system.global_position + chunk.position
+	if is_inside_tree() and chunk.is_inside_tree():
+		chunk_offset = to_local(chunk.global_position)
 	else:
 		chunk_offset = chunk.position
 	

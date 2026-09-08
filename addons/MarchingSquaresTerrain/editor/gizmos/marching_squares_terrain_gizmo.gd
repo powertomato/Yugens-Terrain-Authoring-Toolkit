@@ -159,8 +159,8 @@ func _redraw():
 			var hit_result := space.intersect_ray(query)
 			var wall_normal : Vector3 = Vector3.BACK
 			if hit_result:
-				wall_normal = hit_result.normal
-				terrain_plugin.brush_surface_normal = (terrain_system.global_transform.basis.inverse() * wall_normal).normalized()
+				terrain_plugin.brush_surface_normal = (terrain_system.global_transform.basis.inverse() * hit_result.normal).normalized()
+				wall_normal = terrain_plugin.brush_surface_normal
 			else:
 				terrain_plugin.brush_surface_normal = Vector3.UP
 			

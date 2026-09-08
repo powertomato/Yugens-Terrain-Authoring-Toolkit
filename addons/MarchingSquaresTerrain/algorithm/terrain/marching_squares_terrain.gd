@@ -1193,9 +1193,9 @@ func _build_navigation_mesh_from_walkable_faces(nav_mesh: NavigationMesh) -> Dic
 		for index in range(0, faces.size(), 3):
 			if index + 2 >= faces.size():
 				break
-			var a := chunk.global_transform * faces[index]
-			var b := chunk.global_transform * faces[index + 1]
-			var c := chunk.global_transform * faces[index + 2]
+			var a := chunk.transform * faces[index]
+			var b := chunk.transform * faces[index + 1]
+			var c := chunk.transform * faces[index + 2]
 			var triangle_key := _nav_controller.triangle_key(a, b, c, epsilon)
 			if seen_triangles.has(triangle_key):
 				continue

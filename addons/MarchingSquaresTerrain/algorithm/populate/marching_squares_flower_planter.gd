@@ -216,8 +216,11 @@ func regenerate_flowers() -> void:
 			printerr("No cell_geometry data set while regenerating cells")
 			return
 	
-	var plugin := MarchingSquaresTerrainPlugin.instance
-	var remove_selection := plugin != null and plugin.remove_selection
+	var remove_selection := false
+	if Engine.is_editor_hint():
+		var plugin_script: Resource = load("res://addons/MarchingSquaresTerrain/editor/marching_squares_terrain_plugin.gd")
+		var plugin: Object = plugin_script.get("instance") if plugin_script != null else null
+		remove_selection = plugin != null and bool(plugin.get("remove_selection"))
 	if not planted_chunks.is_empty() and cell_data.is_empty() and not remove_selection:
 		printerr("No cell data set while regenerating cells")
 		return

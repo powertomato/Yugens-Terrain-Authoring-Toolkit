@@ -1752,7 +1752,8 @@ func _repair_chunk_storage() -> void:
 			terrain_chunk.mark_dirty()
 	if MSTDataHandler.save_all_chunks(self):
 		_storage_initialized = true
-		EditorInterface.mark_scene_as_unsaved()
+		if EngineWrapper.instance.is_editor():
+			EngineWrapper.instance.mark_scene_as_unsaved()
 		push_warning("[MST] Chunk metadata was repaired and externalized. Save the scene now to strip embedded chunk payload from the .tscn.")
 	else:
 		push_error("[MST] Failed to repair chunk storage. Embedded chunk data was left untouched.")
